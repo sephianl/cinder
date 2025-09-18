@@ -763,7 +763,8 @@ defmodule Cinder.Table do
         filter_fn: parsed_column.filter_fn,
         searchable: parsed_column.searchable,
         sort_cycle: sort_config.cycle || [nil, :asc, :desc],
-        __slot__: :col
+        __slot__: :col,
+        slot: slot[:inner_block] || default_inner_block(field)  # Add slot field for compatibility
       }
     end)
   end
@@ -866,7 +867,8 @@ defmodule Cinder.Table do
         filter_fn: parsed_column.filter_fn,
         searchable: false,
         sort_cycle: [nil, :asc, :desc],
-        __slot__: :filter
+        __slot__: :filter,
+        slot: nil  # Add slot field for compatibility
       }
     end)
   end

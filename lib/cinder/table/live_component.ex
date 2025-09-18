@@ -1061,6 +1061,11 @@ defmodule Cinder.Table.LiveComponent do
       slot: column.slot
     }
   end
+  
+  # Handle already processed columns that aren't Column structs
+  defp convert_column_to_legacy_format(column) when is_map(column) do
+    column
+  end
 
   # Convert pre-processed filter configuration to legacy format
   @doc false
