@@ -1014,14 +1014,19 @@ defmodule Cinder.Table.LiveComponent do
   end
 
   # Convert pre-processed filter configuration to legacy format
-  defp convert_filter_config_to_legacy_format(config) when is_map(config) do
+  @doc false
+  def convert_filter_config_to_legacy_format(config) when is_map(config) do
+    # For regular columns (__slot__ == :col), preserve their sortable state
+    # For filter-only slots (__slot__ == :filter), they are never sortable
+    default_sortable = if Map.get(config, :__slot__) == :col, do: true, else: false
+    
     %{
-      field: config.field,
-      label: config.label,
-      sortable: Map.get(config, :sortable, false),
+      field: Map.get(config, :field),
+      label: Map.get(config, :label),
+      sortable: Map.get(config, :sortable, default_sortable),
       searchable: Map.get(config, :searchable, false),
       filterable: Map.get(config, :filterable, true),
-      filter_type: config.filter_type,
+      filter_type: Map.get(config, :filter_type),
       filter_options: Map.get(config, :filter_options, []),
       filter_fn: Map.get(config, :filter_fn),
       options: Map.get(config, :options, []),
