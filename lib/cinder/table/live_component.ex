@@ -786,11 +786,49 @@ defmodule Cinder.Table.LiveComponent do
   defp assign_column_definitions(socket) do
     resource = socket.assigns.query
 
-    # Always process display columns for table rendering
+    # Debug what we're starting with
+    if System.get_env("DEBUG_CINDER") do
+      IO.puts("=== Input col assigns ===")
+      Enum.each(socket.assigns.col, fn col ->
+        IO.puts("Col: #{inspect(Map.take(col, [:field, :sortable, :filterable]))}")
+      end)
+      IO.puts("========================")
+    end
+
+    # Check if columns have already been processed (they come from table.ex as processed_columns)
+    # If they have sortable field already set, they've been processed
     display_columns =
-      socket.assigns.col
-      |> Enum.map(&Cinder.Column.parse_column(&1, resource))
-      |> Enum.map(&convert_column_to_legacy_format/1)
+      case socket.assigns.col do
+        [] ->
+          # Empty column list
+          []
+        
+        [first | _] = columns when is_map(first) ->
+          if Map.has_key?(first, :sortable) do
+            # Columns are already processed, just use them directly
+            columns
+          else
+            # Legacy path: columns need to be parsed
+            columns
+            |> Enum.map(&Cinder.Column.parse_column(&1, resource))
+            |> Enum.map(&convert_column_to_legacy_format/1)
+          end
+        
+        columns ->
+          # Fallback for other cases
+          columns
+          |> Enum.map(&Cinder.Column.parse_column(&1, resource))
+          |> Enum.map(&convert_column_to_legacy_format/1)
+      end
+
+    # Debug logging for display columns
+    if System.get_env("DEBUG_CINDER") do
+      IO.puts("=== Display Columns Debug ===")
+      Enum.each(display_columns, fn col ->
+        IO.puts("Field: #{col.field}, Sortable: #{col.sortable}")
+      end)
+      IO.puts("============================")
+    end
 
     # Use filter_configs for filtering if provided (includes filter-only slots)
     # Otherwise use the display columns for backward compatibility
@@ -801,7 +839,18 @@ defmodule Cinder.Table.LiveComponent do
 
         filter_configs ->
           # Convert pre-processed filter configurations to legacy format
-          Enum.map(filter_configs, &convert_filter_config_to_legacy_format/1)
+          converted = Enum.map(filter_configs, &convert_filter_config_to_legacy_format/1)
+          
+          # Debug logging
+          if System.get_env("DEBUG_CINDER") do
+            IO.puts("=== Filter Configs Debug ===")
+            Enum.each(converted, fn config ->
+              IO.puts("Field: #{config.field}, Sortable: #{config.sortable}, Slot: #{config.slot}")
+            end)
+            IO.puts("=========================")
+          end
+          
+          converted
       end
 
     socket
