@@ -751,6 +751,9 @@ defmodule Cinder.Table do
         end
 
       # Create slot in internal format with proper label handling
+      # Get the inner block for rendering
+      inner_block = slot[:inner_block] || default_inner_block(field)
+      
       %{
         field: field,
         label: Map.get(slot, :label, parsed_column.label),
@@ -759,12 +762,12 @@ defmodule Cinder.Table do
         filter_options: parsed_column.filter_options,
         sortable: parsed_column.sortable,
         class: Map.get(slot, :class, ""),
-        inner_block: slot[:inner_block] || default_inner_block(field),
+        inner_block: inner_block,
         filter_fn: parsed_column.filter_fn,
         searchable: parsed_column.searchable,
         sort_cycle: sort_config.cycle || [nil, :asc, :desc],
         __slot__: :col,
-        slot: slot[:inner_block] || default_inner_block(field)  # Add slot field for compatibility
+        slot: [%{inner_block: inner_block}]  # Wrap in proper slot structure for render_slot
       }
     end)
   end
@@ -868,7 +871,7 @@ defmodule Cinder.Table do
         searchable: false,
         sort_cycle: [nil, :asc, :desc],
         __slot__: :filter,
-        slot: nil  # Add slot field for compatibility
+        slot: []  # Empty slot list for filter-only slots
       }
     end)
   end
