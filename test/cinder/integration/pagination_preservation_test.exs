@@ -55,7 +55,6 @@ defmodule Cinder.Integration.PaginationPreservationTest do
         theme: Cinder.Theme.default(),
         bulk_actions: [],
         id_field: :id,
-        emit_visible_ids: false,
         user_has_interacted: false,
         scope: nil
       }
