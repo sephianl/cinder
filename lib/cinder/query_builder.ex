@@ -138,6 +138,7 @@ defmodule Cinder.QueryBuilder do
               base_query,
               actor,
               effective_tenant,
+              scope_opts,
               query_opts,
               filters,
               columns,
@@ -405,6 +406,7 @@ defmodule Cinder.QueryBuilder do
          base_query,
          actor,
          tenant,
+         scope_opts,
          query_opts,
          filters,
          columns,
@@ -423,7 +425,7 @@ defmodule Cinder.QueryBuilder do
       |> apply_search(search_term, columns, search_fn)
       |> apply_sorting(sort_by)
 
-    case Ash.read(prepared_query, build_ash_options(actor, tenant, query_opts)) do
+    case Ash.read(prepared_query, build_ash_options(actor, tenant, scope_opts, query_opts)) do
       {:ok, results} ->
         # Extract just the IDs from results
         ids = Enum.map(results, &Map.get(&1, id_field))
