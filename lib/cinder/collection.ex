@@ -279,6 +279,7 @@ defmodule Cinder.Collection do
       |> assign_new(:pagination, fn -> :offset end)
       |> assign_new(:bulk_actions, fn -> [] end)
       |> assign_new(:id_field, fn -> :id end)
+      |> assign_new(:emit_visible_ids, fn -> false end)
 
     # Validate and normalize query/resource parameters
     normalized_query = normalize_query_params(assigns[:resource], assigns[:query])
