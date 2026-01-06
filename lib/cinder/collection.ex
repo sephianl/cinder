@@ -184,13 +184,7 @@ defmodule Cinder.Collection do
 
   attr(:id_field, :atom,
     default: :id,
-    doc: "Field to use as ID for visible ID tracking (defaults to :id)"
-  )
-
-  attr(:emit_visible_ids, :boolean,
-    default: false,
-    doc:
-      "When true, emits {:cinder_visible_ids, collection_id, [id]} to parent after each data load"
+    doc: "Field to use as ID for update_if_visible operations (defaults to :id)"
   )
 
   attr(:bulk_actions, :list,
@@ -382,7 +376,6 @@ defmodule Cinder.Collection do
         search_fn={@search_fn}
         pagination_mode={@pagination_mode}
         id_field={@id_field}
-        emit_visible_ids={@emit_visible_ids}
         bulk_actions={@bulk_actions}
       />
     </div>
