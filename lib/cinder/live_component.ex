@@ -564,7 +564,9 @@ defmodule Cinder.LiveComponent do
     end
   end
 
-  defp notify_query_change(socket, query) do
+  defp maybe_notify_query_change(socket, nil), do: socket
+
+  defp maybe_notify_query_change(socket, query) do
     if event_name = socket.assigns[:on_query_change] do
       send(self(), {event_name, %{query: query, id: socket.assigns.id}})
     end
@@ -592,21 +594,21 @@ defmodule Cinder.LiveComponent do
   # ============================================================================
 
   @impl true
-  def handle_async(:load_data, {:ok, {:ok, page}}, socket) do
-    {:noreply, handle_result({:ok, page}, socket)}
+  def handle_async(:load_data, {:ok, {{:ok, page}, query}}, socket) do
+    {:noreply, socket |> handle_result({:ok, page}) |> maybe_notify_query_change(query)}
   end
 
   @impl true
-  def handle_async(:load_data, {:ok, {:error, error}}, socket) do
-    {:noreply, handle_result({:error, error}, socket)}
+  def handle_async(:load_data, {:ok, {{:error, error}, _query}}, socket) do
+    {:noreply, handle_result(socket, {:error, error})}
   end
 
   @impl true
   def handle_async(:load_data, {:exit, reason}, socket) do
-    {:noreply, handle_result({:exit, reason}, socket)}
+    {:noreply, handle_result(socket, {:exit, reason})}
   end
 
-  defp handle_result({:ok, page}, socket) do
+  defp handle_result(socket, {:ok, page}) do
     socket
     |> assign(:loading, false)
     |> assign(:error, false)
@@ -616,7 +618,7 @@ defmodule Cinder.LiveComponent do
     |> maybe_update_keyset_cursors(page)
   end
 
-  defp handle_result({:error, error}, socket) do
+  defp handle_result(socket, {:error, error}) do
     Logger.error(
       "Cinder query failed for #{inspect(socket.assigns.query)}: #{inspect(error)}",
       %{
@@ -635,7 +637,7 @@ defmodule Cinder.LiveComponent do
     |> assign(:page, nil)
   end
 
-  defp handle_result({:exit, reason}, socket) do
+  defp handle_result(socket, {:exit, reason}) do
     Logger.error(
       "Cinder query crashed for #{inspect(socket.assigns.query)}: #{inspect(reason)}",
       %{
@@ -997,33 +999,43 @@ defmodule Cinder.LiveComponent do
       before_keyset: before_keyset
     ]
 
-    # Build query and notify parent if callback is set
-    socket =
-      if socket.assigns[:on_query_change] do
-        case Cinder.QueryBuilder.build_query(resource_var, options) do
-          {:ok, query} -> notify_query_change(socket, query)
-          {:error, _} -> socket
-        end
-      else
-        socket
-      end
+    notify_query? = !!socket.assigns[:on_query_change]
 
     socket
     |> assign(:loading, true)
     |> assign(:error, false)
     |> then(fn socket ->
+      build_fn = fn ->
+        # Build query once, reuse for both notification and execution
+        case Cinder.QueryBuilder.build_query(resource_var, options) do
+          {:ok, prepared_query} ->
+            result =
+              Cinder.QueryBuilder.build_and_execute_from_query(
+                resource_var,
+                prepared_query,
+                options
+              )
+
+            query_for_notification = if notify_query?, do: prepared_query, else: nil
+            {result, query_for_notification}
+
+          {:error, _} = error ->
+            {error, nil}
+        end
+      end
+
       if Application.get_env(:ash, :disable_async?) do
         try do
-          resource_var
-          |> Cinder.QueryBuilder.build_and_execute(options)
-          |> handle_result(socket)
+          {result, query} = build_fn.()
+
+          socket
+          |> handle_result(result)
+          |> maybe_notify_query_change(query)
         rescue
-          e -> handle_result({:exit, e}, socket)
+          e -> handle_result(socket, {:exit, e})
         end
       else
-        start_async(socket, :load_data, fn ->
-          Cinder.QueryBuilder.build_and_execute(resource_var, options)
-        end)
+        start_async(socket, :load_data, build_fn)
       end
     end)
   end
