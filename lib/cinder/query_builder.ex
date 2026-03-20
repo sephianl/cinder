@@ -28,7 +28,86 @@ defmodule Cinder.QueryBuilder do
         ]
 
   @doc """
-  Builds a complete query with filters, sorting, and pagination.
+  Builds a query with filters, sorting, and action applied, but does not execute it.
+
+  Returns `{:ok, prepared_query}` or `{:error, reason}`.
+
+  This is useful when you need the query object itself (e.g., for exports or
+  additional modifications) without pagination or execution.
+
+  ## Parameters
+
+  Accepts the same `resource_or_query` and `options` as `build_and_execute/2`.
+
+  ## Examples
+
+      {:ok, query} = Cinder.QueryBuilder.build_query(MyApp.User, [
+        actor: current_user,
+        filters: %{"name" => %{type: :text, value: "John", operator: :contains}},
+        sort_by: [{"name", :asc}],
+        columns: columns
+      ])
+
+      # Use the query for export (no pagination)
+      {:ok, all_matching} = Ash.read(query, actor: current_user)
+  """
+  def build_query(resource_or_query, options) do
+    explicit_actor = Keyword.fetch!(options, :actor)
+    explicit_tenant = Keyword.get(options, :tenant)
+    scope = Keyword.get(options, :scope)
+    scope_opts = extract_scope_options(scope)
+
+    actor = explicit_actor || scope_opts[:actor]
+    tenant = explicit_tenant || scope_opts[:tenant]
+    filters = Keyword.get(options, :filters, %{})
+    sort_by = Keyword.get(options, :sort_by, [])
+    columns = Keyword.get(options, :columns, [])
+    query_opts = Keyword.get(options, :query_opts, [])
+    search_term = Keyword.get(options, :search_term, "")
+    search_fn = Keyword.get(options, :search_fn)
+    action = Keyword.get(options, :action)
+
+    try do
+      base_query = Ash.Query.new(resource_or_query)
+      resource = base_query.resource
+
+      case validate_sortable_fields(sort_by, resource) do
+        :ok ->
+          prepared_query =
+            base_query
+            |> apply_filters(filters, columns)
+            |> apply_search(search_term, columns, search_fn)
+            |> apply_sorting(sort_by)
+            |> apply_action(action, actor, tenant, scope_opts, query_opts)
+
+          {:ok, prepared_query}
+
+        {:error, _message} = error ->
+          error
+      end
+    rescue
+      error ->
+        resource = extract_resource_for_logging(resource_or_query)
+
+        Logger.error(
+          "Cinder query building crashed with exception for #{inspect(resource)}: #{inspect(error)}",
+          %{
+            resource: resource,
+            filters: filters,
+            sort_by: sort_by,
+            query_opts: query_opts,
+            tenant: tenant,
+            exception: inspect(error),
+            stacktrace: Exception.format_stacktrace(__STACKTRACE__)
+          }
+        )
+
+        {:error, error}
+    end
+  end
+
+  @doc """
+  Builds a complete query with filters, sorting, and pagination, then executes it.
 
   ## Parameters
   - `resource_or_query`: The Ash resource to query or a pre-built Ash.Query
@@ -90,6 +169,28 @@ defmodule Cinder.QueryBuilder do
   not match non-paginated results. Use `page.results` for consistent access.
   """
   def build_and_execute(resource_or_query, options) do
+    case build_query(resource_or_query, options) do
+      {:ok, prepared_query} ->
+        build_and_execute_from_query(resource_or_query, prepared_query, options)
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @doc """
+  Executes an already-built query with pagination.
+
+  This is useful when you've already called `build_query/2` and want to execute
+  the resulting query without rebuilding it. Used internally to avoid double
+  query building when `on_query_change` is set.
+
+  ## Parameters
+  - `resource_or_query`: The original resource or query (used for actor/tenant fallback)
+  - `prepared_query`: The query returned by `build_query/2`
+  - `options`: Same options as `build_and_execute/2`
+  """
+  def build_and_execute_from_query(resource_or_query, prepared_query, options) do
     explicit_actor = Keyword.fetch!(options, :actor)
     explicit_tenant = Keyword.get(options, :tenant)
     scope = Keyword.get(options, :scope)
@@ -98,16 +199,11 @@ defmodule Cinder.QueryBuilder do
     # Explicit actor/tenant override scope values
     actor = explicit_actor || scope_opts[:actor]
     tenant = explicit_tenant || scope_opts[:tenant]
-    filters = Keyword.get(options, :filters, %{})
-    sort_by = Keyword.get(options, :sort_by, [])
     raw_page_size = Keyword.get(options, :page_size, 25)
     # Strip negative page sizes - use default instead
     page_size = if raw_page_size > 0, do: raw_page_size, else: 25
     current_page = Keyword.get(options, :current_page, 1)
-    columns = Keyword.get(options, :columns, [])
     query_opts = Keyword.get(options, :query_opts, [])
-    search_term = Keyword.get(options, :search_term, "")
-    search_fn = Keyword.get(options, :search_fn)
 
     # Keyset pagination options
     pagination_mode = Keyword.get(options, :pagination_mode, :offset)
@@ -115,74 +211,35 @@ defmodule Cinder.QueryBuilder do
     before_keyset = Keyword.get(options, :before_keyset)
 
     try do
-      # Query tenant as final fallback
+      # Query actor/tenant as final fallback
+      effective_actor =
+        actor ||
+          if is_struct(resource_or_query, Ash.Query),
+            do: get_in(resource_or_query.context, [:private, :actor])
+
       effective_tenant =
         tenant || if is_struct(resource_or_query, Ash.Query), do: resource_or_query.tenant
 
-      # Normalize input to a query and extract resource for logging
-      {base_query, resource} =
-        normalize_resource_or_query(
-          resource_or_query,
-          actor,
-          effective_tenant,
-          scope_opts,
-          query_opts
-        )
-
-      # Validate sort fields before applying them to prevent crashes
-      case validate_sortable_fields(sort_by, resource) do
-        :ok ->
-          # Continue with normal query building
-          prepared_query =
-            base_query
-            |> apply_query_opts(query_opts)
-            |> apply_filters(filters, columns)
-            |> apply_search(search_term, columns, search_fn)
-            |> apply_sorting(sort_by)
-
-          # Handle pagination based on action support
-          case action_supports_pagination?(prepared_query) do
-            true ->
-              case pagination_mode do
-                :keyset ->
-                  execute_with_keyset_pagination(
-                    prepared_query,
-                    actor,
-                    effective_tenant,
-                    scope_opts,
-                    query_opts,
-                    page_size,
-                    after_keyset,
-                    before_keyset
-                  )
-
-                :offset ->
-                  execute_with_pagination(
-                    prepared_query,
-                    actor,
-                    effective_tenant,
-                    scope_opts,
-                    query_opts,
-                    current_page,
-                    page_size
-                  )
-              end
-
-            false ->
-              # Check if user has configured pagination but action doesn't support it
-              if Keyword.get(options, :pagination_configured, false) do
-                require Logger
-
-                Logger.warning(
-                  "Table configured with page_size but action #{inspect(prepared_query.action.name)} doesn't support pagination. " <>
-                    "All records will be loaded into memory. Add 'pagination do ... end' to your action: " <>
-                    "https://hexdocs.pm/ash/pagination.html"
-                )
-              end
-
-              execute_without_pagination(
+      # Handle pagination based on action support
+      case action_supports_pagination?(prepared_query) do
+        true ->
+          case pagination_mode do
+            :keyset ->
+              execute_with_keyset_pagination(
                 prepared_query,
-                actor,
+                effective_actor,
+                effective_tenant,
+                scope_opts,
+                query_opts,
+                page_size,
+                after_keyset,
+                before_keyset
+              )
+
+            :offset ->
+              execute_with_pagination(
+                prepared_query,
+                effective_actor,
                 effective_tenant,
                 scope_opts,
                 query_opts,
@@ -191,21 +248,36 @@ defmodule Cinder.QueryBuilder do
               )
           end
 
-        {:error, message} ->
-          # Return validation error instead of crashing
-          {:error, message}
+        false ->
+          # Check if user has configured pagination but action doesn't support it
+          if Keyword.get(options, :pagination_configured, false) do
+            require Logger
+
+            Logger.warning(
+              "Table configured with page_size but action #{inspect(prepared_query.action.name)} doesn't support pagination. " <>
+                "All records will be loaded into memory. Add 'pagination do ... end' to your action: " <>
+                "https://hexdocs.pm/ash/pagination.html"
+            )
+          end
+
+          execute_without_pagination(
+            prepared_query,
+            effective_actor,
+            effective_tenant,
+            scope_opts,
+            query_opts,
+            current_page,
+            page_size
+          )
       end
     rescue
       error ->
-        # Log exceptions (like calculation errors) with full context
         resource = extract_resource_for_logging(resource_or_query)
 
         Logger.error(
           "Cinder table query crashed with exception for #{inspect(resource)}: #{inspect(error)}",
           %{
             resource: resource,
-            filters: filters,
-            sort_by: sort_by,
             current_page: current_page,
             page_size: page_size,
             query_opts: query_opts,
@@ -219,39 +291,36 @@ defmodule Cinder.QueryBuilder do
     end
   end
 
-  # Normalize input to always return {query, resource} tuple
-  defp normalize_resource_or_query(%Ash.Query{} = query, actor, tenant, _scope_opts, query_opts) do
-    # Fix nil action edge case
-    updated_query =
-      if is_nil(query.action) do
-        %{query | action: Ash.Resource.Info.action(query.resource, :read)}
-      else
-        query
+  # Ensure resource has an action set
+  defp apply_action(query, action, actor, tenant, scope_opts, query_opts) do
+    query
+    |> maybe_set_tenant(tenant)
+    |> maybe_set_actor(actor)
+    |> apply_query_opts(query_opts)
+    |> then(fn query ->
+      cond do
+        query.action ->
+          query
+
+        action ->
+          Ash.Query.for_read(
+            query,
+            action,
+            %{},
+            build_ash_options(actor, tenant, scope_opts, query_opts)
+          )
+
+        true ->
+          primary_read = Ash.Resource.Info.primary_action!(query.resource, :read)
+
+          Ash.Query.for_read(
+            query,
+            primary_read.name,
+            %{},
+            build_ash_options(actor, tenant, scope_opts, query_opts)
+          )
       end
-
-    # Apply actor/tenant context to query for hooks and sub-queries
-    context_query =
-      updated_query
-      |> maybe_set_tenant(tenant)
-      |> maybe_set_actor(actor)
-
-    # Apply query_opts (load, select, etc.) to the existing query
-    final_query = apply_query_opts(context_query, query_opts)
-
-    {final_query, query.resource}
-  end
-
-  defp normalize_resource_or_query(resource, actor, tenant, scope_opts, query_opts)
-       when is_atom(resource) do
-    query =
-      Ash.Query.for_read(
-        resource,
-        :read,
-        %{},
-        build_ash_options(actor, tenant, scope_opts, query_opts)
-      )
-
-    {query, resource}
+    end)
   end
 
   defp maybe_set_tenant(query, nil), do: query
@@ -713,37 +782,60 @@ defmodule Cinder.QueryBuilder do
   end
 
   @doc """
+  Applies default sorts for columns with nil-less sort cycles.
+
+  Columns whose `sort_cycle` does not contain `nil` imply "always sorted".
+  For any such column not already present in `query_sorts`, the first value
+  in the cycle is appended as a default sort (preserving declaration order).
+
+  Query sorts always take precedence.
+  """
+  def default_sorts_from_cycles(columns, query_sorts) do
+    sorted_fields = MapSet.new(query_sorts, fn {field, _dir} -> field end)
+
+    cycle_defaults =
+      columns
+      |> Enum.filter(fn col ->
+        col.sortable && nil not in col.sort_cycle && col.field not in sorted_fields
+      end)
+      |> Enum.map(fn col -> {col.field, hd(col.sort_cycle)} end)
+
+    query_sorts ++ cycle_defaults
+  end
+
+  @doc """
   Toggles sort direction using custom cycle configuration.
 
   Supports custom sort cycles like [nil, :desc_nils_last, :asc_nils_first].
 
   Falls back to standard toggle_sort_direction/2 if no custom cycle provided.
+
+  ## Options
+
+  * `sort_mode` - `:additive` (default) adds to existing sorts, `:exclusive` replaces them
   """
-  def toggle_sort_with_cycle(current_sort, key, sort_cycle \\ nil) do
+  def toggle_sort_with_cycle(current_sort, key, sort_cycle \\ nil, sort_mode \\ :additive)
+
+  def toggle_sort_with_cycle(current_sort, key, sort_cycle, sort_mode) do
     cycle = sort_cycle || [nil, :asc, :desc]
 
     case Enum.find(current_sort, fn {sort_key, _direction} -> sort_key == key end) do
       {^key, current_direction} ->
-        # Find current position in cycle and advance to next
+        # Find current position in cycle and advance, wrapping around
         current_index = Enum.find_index(cycle, &(&1 == current_direction))
-        next_index = if current_index, do: current_index + 1, else: 1
+        next_index = if current_index, do: rem(current_index + 1, length(cycle)), else: 1
 
-        if next_index >= length(cycle) do
-          # End of cycle, remove sort (nil state)
-          Enum.reject(current_sort, fn {sort_key, _direction} -> sort_key == key end)
+        next_direction = Enum.at(cycle, next_index)
+
+        if next_direction == nil do
+          # Next state is nil, remove sort
+          remove_sort(current_sort, key, sort_mode)
         else
-          next_direction = Enum.at(cycle, next_index)
-
-          if next_direction == nil do
-            # Next state is nil, remove sort
-            Enum.reject(current_sort, fn {sort_key, _direction} -> sort_key == key end)
-          else
-            # Update to next direction in cycle
-            Enum.map(current_sort, fn
-              {^key, _} -> {key, next_direction}
-              other -> other
-            end)
-          end
+          # Update to next direction in cycle
+          Enum.map(current_sort, fn
+            {^key, _} -> {key, next_direction}
+            other -> other
+          end)
         end
 
       nil ->
@@ -751,12 +843,21 @@ defmodule Cinder.QueryBuilder do
         first_direction = Enum.find(cycle, &(&1 != nil))
 
         if first_direction do
-          [{key, first_direction} | current_sort]
+          add_sort(current_sort, key, first_direction, sort_mode)
         else
           # Cycle has no non-nil values, fall back to standard
           toggle_sort_direction(current_sort, key)
         end
     end
+  end
+
+  defp add_sort(_current_sort, key, direction, :exclusive), do: [{key, direction}]
+  defp add_sort(current_sort, key, direction, :additive), do: [{key, direction} | current_sort]
+
+  defp remove_sort(_current_sort, _key, :exclusive), do: []
+
+  defp remove_sort(current_sort, key, :additive) do
+    Enum.reject(current_sort, fn {sort_key, _direction} -> sort_key == key end)
   end
 
   @doc """
@@ -957,8 +1058,7 @@ defmodule Cinder.QueryBuilder do
       # Parse field to handle relationship calculations for sortability check
       {target_resource, target_field} = resolve_field_resource(resource, field_string)
 
-      target_field_atom =
-        if is_binary(target_field), do: String.to_atom(target_field), else: target_field
+      target_field_atom = String.to_atom(target_field)
 
       # Check if it's a calculation that needs validation
       case get_calculation_info(target_resource, target_field_atom) do
@@ -1117,14 +1217,6 @@ defmodule Cinder.QueryBuilder do
 
         # Check if embed_field is an embedded attribute
         case Ash.Resource.Info.attribute(resource, embed_field_atom) do
-          %{type: {:array, embedded_type}} when is_atom(embedded_type) ->
-            # Array of embedded resources - check if nested field exists on embedded type
-            validate_embedded_resource_field(embedded_type, nested_field)
-
-          %{type: embedded_type} when is_atom(embedded_type) ->
-            # Single embedded resource - check if nested field exists on embedded type
-            validate_embedded_resource_field(embedded_type, nested_field)
-
           %{type: :map} ->
             # Map type - assume nested field is valid (can't validate structure)
             true
@@ -1133,12 +1225,16 @@ defmodule Cinder.QueryBuilder do
             # Array of maps - assume nested field is valid
             true
 
+          %{type: {:array, embedded_type}} when is_atom(embedded_type) ->
+            # Array of embedded resources - check if nested field exists on embedded type
+            validate_embedded_resource_field(embedded_type, nested_field)
+
+          %{type: embedded_type} when is_atom(embedded_type) ->
+            # Single embedded resource - check if nested field exists on embedded type
+            validate_embedded_resource_field(embedded_type, nested_field)
+
           nil ->
             # Embed field doesn't exist
-            false
-
-          _ ->
-            # Field exists but is not embedded type
             false
         end
       else
@@ -1158,14 +1254,6 @@ defmodule Cinder.QueryBuilder do
         embed_field_atom = String.to_atom(embed_field)
 
         case Ash.Resource.Info.attribute(resource, embed_field_atom) do
-          %{type: {:array, embedded_type}} when is_atom(embedded_type) ->
-            # Array of embedded resources - validate nested path on embedded type
-            validate_nested_path_on_embedded_resource(embedded_type, nested_path)
-
-          %{type: embedded_type} when is_atom(embedded_type) ->
-            # Single embedded resource - validate nested path on embedded type
-            validate_nested_path_on_embedded_resource(embedded_type, nested_path)
-
           %{type: :map} ->
             # Map type - assume nested path is valid (can't validate structure)
             true
@@ -1174,12 +1262,16 @@ defmodule Cinder.QueryBuilder do
             # Array of maps - assume nested path is valid
             true
 
+          %{type: {:array, embedded_type}} when is_atom(embedded_type) ->
+            # Array of embedded resources - validate nested path on embedded type
+            validate_nested_path_on_embedded_resource(embedded_type, nested_path)
+
+          %{type: embedded_type} when is_atom(embedded_type) ->
+            # Single embedded resource - validate nested path on embedded type
+            validate_nested_path_on_embedded_resource(embedded_type, nested_path)
+
           nil ->
             # Embed field doesn't exist
-            false
-
-          _ ->
-            # Field exists but is not embedded type
             false
         end
       else
@@ -1205,12 +1297,6 @@ defmodule Cinder.QueryBuilder do
             next_embed_atom = String.to_atom(next_embed_field)
 
             case Ash.Resource.Info.attribute(embedded_type, next_embed_atom) do
-              %{type: {:array, deeper_embedded_type}} when is_atom(deeper_embedded_type) ->
-                validate_nested_path_on_embedded_resource(deeper_embedded_type, remaining_path)
-
-              %{type: deeper_embedded_type} when is_atom(deeper_embedded_type) ->
-                validate_nested_path_on_embedded_resource(deeper_embedded_type, remaining_path)
-
               %{type: :map} ->
                 # Map type - assume remaining path is valid
                 true
@@ -1219,12 +1305,14 @@ defmodule Cinder.QueryBuilder do
                 # Array of maps - assume remaining path is valid
                 true
 
+              %{type: {:array, deeper_embedded_type}} when is_atom(deeper_embedded_type) ->
+                validate_nested_path_on_embedded_resource(deeper_embedded_type, remaining_path)
+
+              %{type: deeper_embedded_type} when is_atom(deeper_embedded_type) ->
+                validate_nested_path_on_embedded_resource(deeper_embedded_type, remaining_path)
+
               nil ->
                 # Field doesn't exist on this embedded resource
-                false
-
-              _ ->
-                # Field exists but is not embedded type
                 false
             end
           else
@@ -1281,10 +1369,10 @@ defmodule Cinder.QueryBuilder do
   @doc """
   Checks if a field exists on a resource (including attributes, relationships, calculations, aggregates)
   """
-  def field_exists_on_resource?(resource, field_atom) do
+  def field_exists_on_resource?(resource, field) do
     try do
       if is_atom(resource) and Ash.Resource.Info.resource?(resource) do
-        field_atom = if is_binary(field_atom), do: String.to_atom(field_atom), else: field_atom
+        field_atom = if is_binary(field), do: String.to_atom(field), else: field
 
         # Get all valid field types
         attributes = Ash.Resource.Info.attributes(resource) |> Enum.map(& &1.name)
@@ -1358,7 +1446,10 @@ defmodule Cinder.QueryBuilder do
     sorts
     |> Enum.map(&normalize_sort_tuple/1)
     |> Enum.filter(&valid_table_sort?(&1, columns))
-    |> Enum.map(fn {field, direction} -> {Atom.to_string(field), direction} end)
+    |> Enum.map(fn
+      {field, direction} when is_atom(field) -> {Atom.to_string(field), direction}
+      {field, direction} when is_binary(field) -> {field, direction}
+    end)
   end
 
   def extract_query_sorts(_query, _columns) do
@@ -1376,6 +1467,48 @@ defmodule Cinder.QueryBuilder do
     {field, :asc}
   end
 
+  # Handle calc expressions for calculations
+  # These are stored with a simple atom as the calc_name
+  defp normalize_sort_tuple({
+         %{module: Ash.Resource.Calculation.Expression, calc_name: calc_name},
+         direction
+       })
+       when is_atom(calc_name) and not is_nil(calc_name) and direction in [:asc, :desc] do
+    {calc_name, direction}
+  end
+
+  # Handle calc expressions from embedded field sorts (e.g., weather__clear) and relationship field sorts (e.g., artist.name)
+  # The sort is an Ash.Query.Calculation with module: Ash.Resource.Calculation.Expression
+  # and opts containing expr: %Ash.Query.Call{name: :get_path, args: [{:_ref, [], :field}, [:path]]}
+  defp normalize_sort_tuple({
+         %{module: Ash.Resource.Calculation.Expression, opts: opts},
+         direction
+       })
+       when direction in [:asc, :desc] do
+    case Keyword.get(opts, :expr) do
+      %{name: :get_path, args: [{:_ref, [], embed_name}, field_path]} ->
+        embed_str = to_string(embed_name)
+        field_str = field_path |> Enum.map_join("__", &to_string/1)
+        {"#{embed_str}__#{field_str}", direction}
+
+      %{relationship_path: rel_path, attribute: attr}
+      when is_list(rel_path) and rel_path != [] and not is_nil(attr) ->
+        relationship = Enum.map_join(rel_path, ".", &to_string/1)
+
+        attribute =
+          case attr do
+            # Handles calculations & aggregates on relationships
+            %Ash.Query.Calculation{calc_name: cn, name: n} -> cn || n
+            v -> v
+          end
+
+        {"#{relationship}.#{attribute}", direction}
+
+      _ ->
+        nil
+    end
+  end
+
   defp normalize_sort_tuple(_), do: nil
 
   # Check if a sort tuple is valid for table display
@@ -1385,8 +1518,8 @@ defmodule Cinder.QueryBuilder do
     do: false
 
   defp valid_table_sort?({field, _direction}, columns)
-       when is_list(columns) and length(columns) > 0 do
-    field_name = Atom.to_string(field)
+       when is_list(columns) and columns != [] do
+    field_name = if is_atom(field), do: Atom.to_string(field), else: field
 
     Enum.any?(columns, fn column ->
       column_field = Map.get(column, :field) || Map.get(column, "field")

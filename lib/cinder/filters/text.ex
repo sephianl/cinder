@@ -8,31 +8,36 @@ defmodule Cinder.Filters.Text do
 
   @behaviour Cinder.Filter
   use Phoenix.Component
+  use Cinder.Messages
 
-  require Ash.Query
   import Cinder.Filter
 
   @impl true
-  def render(column, current_value, theme, _assigns) do
+  def render(column, current_value, theme, assigns) do
     filter_options = Map.get(column, :filter_options, [])
-    placeholder = get_option(filter_options, :placeholder, "Filter #{column.label}...")
+
+    default_placeholder = dgettext("cinder", "Filter %{label}...", label: column.label)
+    placeholder = get_option(filter_options, :placeholder, default_placeholder)
+    table_id = Map.get(assigns, :table_id)
 
     assigns = %{
       column: column,
       current_value: current_value || "",
       placeholder: placeholder,
-      theme: theme
+      theme: theme,
+      filter_id: table_id && filter_id(table_id, column.field)
     }
 
     ~H"""
     <input
       type="text"
+      id={@filter_id}
       name={field_name(@column.field)}
       value={@current_value}
       placeholder={@placeholder}
       phx-debounce="300"
       class={@theme.filter_text_input_class}
-      {@theme.filter_text_input_data}
+      data-key="filter_text_input_class"
     />
     """
   end

@@ -142,9 +142,18 @@ defmodule Cinder do
   # Unified collection component
   defdelegate collection(assigns), to: Cinder.Collection
 
+  # Query building
+  defdelegate build_query(resource_or_query, options), to: Cinder.QueryBuilder
+
   # Refresh functions
   defdelegate refresh_table(socket, table_id), to: Cinder.Refresh
   defdelegate refresh_tables(socket, table_ids), to: Cinder.Refresh
+
+  # In-memory update functions (efficient for small PubSub-driven changes)
+  defdelegate update_item(socket, collection_id, id, update_fn), to: Cinder.Update
+  defdelegate update_items(socket, collection_id, ids, update_fn), to: Cinder.Update
+  defdelegate update_if_visible(socket, collection_id, id, update_fn), to: Cinder.Update
+  defdelegate update_items_if_visible(socket, collection_id, ids, update_fn), to: Cinder.Update
 
   @doc """
   Sets up Cinder with configured custom filters.
@@ -207,7 +216,7 @@ defmodule Cinder do
       :ok ->
         configured_filters = Application.get_env(:cinder, :filters, [])
 
-        if length(configured_filters) > 0 do
+        if configured_filters != [] do
           filter_names = configured_filters |> Keyword.keys() |> Enum.join(", ")
           require Logger
 

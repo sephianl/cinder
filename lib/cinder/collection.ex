@@ -80,9 +80,34 @@ defmodule Cinder.Collection do
   | `container_class` | ❌ N/A | ✅ Override | ✅ Override | Custom container CSS |
   | `grid_columns` | ❌ N/A | ❌ N/A | ✅ Column count | Number of grid columns |
   | `click` | ✅ Row click | ✅ Item click | ✅ Item click | Click handler |
+
+  ## Custom Controls Layout
+
+  Use the `:controls` slot to customize how filters and search are rendered while
+  keeping Cinder's state management, URL sync, and query building intact:
+
+  ```heex
+  <Cinder.collection resource={MyApp.User} actor={@current_user}>
+    <:col :let={user} field="name" filter sort search>{user.name}</:col>
+    <:col :let={user} field="status" filter={:select}>{user.status}</:col>
+
+    <:controls :let={controls}>
+      <Cinder.Controls.render_header {controls} />
+      <div class="grid grid-cols-2 gap-4">
+        <Cinder.Controls.render_filter
+          :for={filter <- controls.filters}
+          filter={filter}
+        />
+      </div>
+    </:controls>
+  </Cinder.collection>
+  ```
+
+  See `Cinder.Controls` for the full API and more examples.
   """
 
   use Phoenix.Component
+  use Cinder.Messages
   require Logger
 
   # Shared attributes for all layouts
@@ -94,6 +119,11 @@ defmodule Cinder.Collection do
   attr(:query, :any,
     default: nil,
     doc: "The Ash query to execute (use either resource or query, not both)"
+  )
+
+  attr(:action, :atom,
+    default: nil,
+    doc: "The read action to use. Defaults to the primary read action."
   )
 
   attr(:actor, :any, default: nil, doc: "Actor for authorization")
@@ -108,8 +138,9 @@ defmodule Cinder.Collection do
   attr(:id, :string, default: "cinder-collection", doc: "Unique identifier for the collection")
 
   attr(:page_size, :any,
-    default: 25,
-    doc: "Number of items per page or [default: 25, options: [10, 25, 50]]"
+    default: nil,
+    doc:
+      "Number of items per page or [default: 25, options: [10, 25, 50]]. See `Cinder.PageSize` for global configuration."
   )
 
   attr(:theme, :any, default: "default", doc: "Theme name or theme map")
@@ -125,6 +156,14 @@ defmodule Cinder.Collection do
   )
 
   attr(:on_state_change, :any, default: nil, doc: "Custom state change handler")
+
+  attr(:on_query_change, :any,
+    default: nil,
+    doc:
+      "Event name sent to parent when the query changes. " <>
+        "Parent receives {event_name, %{query: Ash.Query.t(), id: string()}}."
+  )
+
   attr(:show_pagination, :boolean, default: true, doc: "Whether to show pagination controls")
 
   attr(:pagination, :any,
@@ -133,9 +172,12 @@ defmodule Cinder.Collection do
       "Pagination mode: :offset (default) or :keyset. Keyset pagination is faster for large datasets but only supports prev/next navigation."
   )
 
-  attr(:show_filters, :boolean,
+  attr(:show_filters, :any,
     default: nil,
-    doc: "Whether to show filter controls (auto-detected if nil)"
+    doc:
+      "Controls filter visibility. true = always visible, false = hidden, nil = auto-detect, " <>
+        ":toggle/\"toggle\" = collapsible starting collapsed, :toggle_open/\"toggle_open\" = collapsible starting expanded. " <>
+        "Can also be set globally via `config :cinder, show_filters: :toggle`."
   )
 
   attr(:show_sort, :boolean,
@@ -146,13 +188,13 @@ defmodule Cinder.Collection do
   attr(:loading_message, :string, default: "Loading...", doc: "Message to show while loading")
 
   attr(:filters_label, :string,
-    default: "🔍 Filters",
-    doc: "Label for the filters component"
+    default: nil,
+    doc: "Label for the filters component (defaults to translated \"Filters\")"
   )
 
   attr(:sort_label, :string,
-    default: "Sort by:",
-    doc: "Label for sort button group (list/grid only)"
+    default: nil,
+    doc: "Label for sort button group (defaults to translated \"Sort by:\")"
   )
 
   attr(:search, :any,
@@ -161,8 +203,13 @@ defmodule Cinder.Collection do
   )
 
   attr(:empty_message, :string,
-    default: "No results found",
+    default: nil,
     doc: "Message to show when no results"
+  )
+
+  attr(:error_message, :string,
+    default: nil,
+    doc: "Message to show on error"
   )
 
   attr(:class, :string, default: "", doc: "Additional CSS classes for the outer container")
@@ -180,6 +227,22 @@ defmodule Cinder.Collection do
   attr(:click, :any,
     default: nil,
     doc: "Function to call when a row/item is clicked. Receives the item as argument."
+  )
+
+  attr(:id_field, :atom,
+    default: :id,
+    doc: "Field to use as ID for update_if_visible operations (defaults to :id)"
+  )
+
+  attr(:selectable, :boolean,
+    default: false,
+    doc: "Enable row/item selection via checkboxes"
+  )
+
+  attr(:on_selection_change, :any,
+    default: nil,
+    doc:
+      "Event name (atom or string) sent to parent when selection changes. Parent receives {event_name, %{selected_ids: MapSet.t(), selected_count: integer(), component_id: string(), action: atom()}}."
   )
 
   slot :col do
@@ -238,21 +301,76 @@ defmodule Cinder.Collection do
     attr(:fn, :fun, doc: "Custom filter function (fn query, filter_config -> query)")
   end
 
+  slot :bulk_action do
+    attr(:action, :any,
+      required: true,
+      doc: "Ash action atom or function/2 receiving (query, opts) like code interface functions"
+    )
+
+    attr(:label, :string,
+      doc:
+        "Button label text. Supports {count} interpolation. If provided, renders a themed button."
+    )
+
+    attr(:variant, :atom,
+      values: [:primary, :secondary, :danger],
+      doc:
+        "Button style: :primary (solid), :secondary (outline), :danger (destructive). Default: :primary"
+    )
+
+    attr(:action_opts, :list,
+      doc:
+        "Additional options passed to the Ash action (e.g., [return_records?: true, notify?: true])"
+    )
+
+    attr(:confirm, :string,
+      doc: "Confirmation message. Supports {count} interpolation for selected count."
+    )
+
+    attr(:on_success, :atom,
+      doc:
+        "Message name sent to parent via handle_info on success. Payload: %{component_id, action, count, result}"
+    )
+
+    attr(:on_error, :atom,
+      doc:
+        "Message name sent to parent via handle_info on error. Payload: %{component_id, action, reason}"
+    )
+  end
+
+  slot(:controls,
+    required: false,
+    doc:
+      "Custom layout for the filter/search controls area. " <>
+        "Receives a controls data map via :let with filters, search, and metadata. " <>
+        "Use Cinder.Controls helpers to render individual filters, search, and headers."
+  )
+
+  slot(:loading, required: false, doc: "Custom loading state content")
+  slot(:empty, required: false, doc: "Custom empty state content")
+  slot(:error, required: false, doc: "Custom error state content")
+
   def collection(assigns) do
     assigns =
       assigns
       |> assign_new(:id, fn -> "cinder-collection" end)
       |> assign_new(:layout, fn -> :table end)
-      |> assign_new(:page_size, fn -> 25 end)
+      |> assign_new(:page_size, fn -> Cinder.PageSize.get_default_page_size() end)
       |> assign_new(:theme, fn -> "default" end)
       |> assign_new(:url_state, fn -> false end)
       |> assign_new(:query_opts, fn -> [] end)
       |> assign_new(:on_state_change, fn -> nil end)
+      |> assign_new(:on_query_change, fn -> nil end)
       |> assign_new(:show_pagination, fn -> true end)
-      |> assign_new(:loading_message, fn -> "Loading..." end)
-      |> assign_new(:filters_label, fn -> "🔍 Filters" end)
-      |> assign_new(:sort_label, fn -> "Sort by:" end)
-      |> assign_new(:empty_message, fn -> "No results found" end)
+      |> assign_new(:loading_message, fn -> dgettext("cinder", "Loading...") end)
+      |> assign(:filters_label, assigns[:filters_label] || dgettext("cinder", "Filters"))
+      |> assign(:sort_label, assigns[:sort_label] || dgettext("cinder", "Sort by:"))
+      |> assign(:empty_message, assigns.empty_message || dgettext("cinder", "No results found"))
+      |> assign(
+        :error_message,
+        assigns.error_message ||
+          dgettext("cinder", "An error occurred while loading data")
+      )
       |> assign_new(:class, fn -> "" end)
       |> assign_new(:container_class, fn -> nil end)
       |> assign_new(:tenant, fn -> nil end)
@@ -260,6 +378,9 @@ defmodule Cinder.Collection do
       |> assign_new(:search, fn -> nil end)
       |> assign_new(:grid_columns, fn -> nil end)
       |> assign_new(:pagination, fn -> :offset end)
+      |> assign_new(:selectable, fn -> false end)
+      |> assign_new(:on_selection_change, fn -> nil end)
+      |> assign(:sort_mode, normalize_sort_mode(assigns[:sort_mode]))
 
     # Validate and normalize query/resource parameters
     normalized_query = normalize_query_params(assigns[:resource], assigns[:query])
@@ -271,21 +392,21 @@ defmodule Cinder.Collection do
     # Process filter slots if present
     processed_filter_slots = process_filter_slots(Map.get(assigns, :filter, []), resource)
 
-    # Merge columns and filter slots
-    all_filter_configs = merge_filter_configurations(processed_columns, processed_filter_slots)
+    # Build query columns (columns used for filtering and searching)
+    query_columns = build_query_columns(processed_columns, processed_filter_slots)
 
     # Process unified search configuration
     {search_label, search_placeholder, search_enabled, search_fn} =
       process_search_config(assigns.search, processed_columns)
 
     # Determine if filters should be shown
-    show_filters = determine_show_filters(assigns, all_filter_configs, search_enabled)
+    show_filters = determine_show_filters(assigns, query_columns, search_enabled)
 
     # Determine if sort controls should be shown (for list/grid layouts)
     show_sort = determine_show_sort(assigns, processed_columns)
 
     # Parse page_size configuration
-    page_size_config = parse_page_size_config(assigns.page_size)
+    page_size_config = Cinder.PageSize.parse(assigns.page_size)
 
     # Parse pagination mode
     pagination_mode = parse_pagination_mode(assigns.pagination)
@@ -296,6 +417,15 @@ defmodule Cinder.Collection do
 
     # Get the item slot for list/grid layouts
     item_slot = Map.get(assigns, :item, [])
+
+    # Get the bulk_action slots
+    bulk_action_slots = Map.get(assigns, :bulk_action, [])
+
+    # Get state content slots
+    controls_slot = Map.get(assigns, :controls, [])
+    loading_slot = Map.get(assigns, :loading, [])
+    empty_slot = Map.get(assigns, :empty, [])
+    error_slot = Map.get(assigns, :error, [])
 
     # Resolve theme
     resolved_theme = resolve_theme(assigns.theme)
@@ -308,7 +438,7 @@ defmodule Cinder.Collection do
       assigns
       |> assign(:normalized_query, normalized_query)
       |> assign(:processed_columns, processed_columns)
-      |> assign(:all_filter_configs, all_filter_configs)
+      |> assign(:query_columns, query_columns)
       |> assign(:page_size_config, page_size_config)
       |> assign(:search_label, search_label)
       |> assign(:search_placeholder, search_placeholder)
@@ -319,6 +449,11 @@ defmodule Cinder.Collection do
       |> assign(:pagination_mode, pagination_mode)
       |> assign(:renderer, renderer)
       |> assign(:item_slot, item_slot)
+      |> assign(:bulk_action_slots, bulk_action_slots)
+      |> assign(:controls_slot, controls_slot)
+      |> assign(:loading_slot, loading_slot)
+      |> assign(:empty_slot, empty_slot)
+      |> assign(:error_slot, error_slot)
       |> assign(:row_click, row_click)
       |> assign(:item_click, item_click)
       |> assign(:resolved_theme, resolved_theme)
@@ -331,6 +466,7 @@ defmodule Cinder.Collection do
         id={@id}
         renderer={@renderer}
         query={@normalized_query}
+        action={@action}
         actor={@actor}
         tenant={@tenant}
         scope={@scope}
@@ -349,8 +485,13 @@ defmodule Cinder.Collection do
         filters_label={@filters_label}
         sort_label={@sort_label}
         empty_message={@empty_message}
+        error_message={@error_message}
+        controls_slot={@controls_slot}
+        loading_slot={@loading_slot}
+        empty_slot={@empty_slot}
+        error_slot={@error_slot}
         col={@processed_columns}
-        filter_configs={@all_filter_configs}
+        query_columns={@query_columns}
         row_click={@row_click}
         item_click={@item_click}
         item_slot={@item_slot}
@@ -361,6 +502,12 @@ defmodule Cinder.Collection do
         search_placeholder={@search_placeholder}
         search_fn={@search_fn}
         pagination_mode={@pagination_mode}
+        id_field={@id_field}
+        selectable={@selectable}
+        on_selection_change={@on_selection_change}
+        on_query_change={@on_query_change}
+        bulk_action_slots={@bulk_action_slots}
+        sort_mode={@sort_mode}
       />
     </div>
     """
@@ -388,7 +535,8 @@ defmodule Cinder.Collection do
       filter_fn = if is_list(filter_attr), do: Keyword.get(filter_attr, :fn), else: nil
 
       # Use Column module to parse the column configuration
-      column_config = %{
+      # Only include label if explicitly set, to preserve fallback behavior
+      base_column_config = %{
         field: field,
         sortable: sort_config.enabled,
         filterable: filter_attr != false,
@@ -396,6 +544,12 @@ defmodule Cinder.Collection do
         filter_fn: filter_fn,
         search: Map.get(slot, :search, false)
       }
+
+      column_config =
+        case Map.get(slot, :label) do
+          nil -> base_column_config
+          label -> Map.put(base_column_config, :label, label)
+        end
 
       # Let Column module infer filter type if needed, otherwise use explicit type
       {filter_type, filter_options_from_unified} =
@@ -445,6 +599,8 @@ defmodule Cinder.Collection do
         end
 
       # Create slot in internal format with proper label handling
+      # Note: We store the original slot for render_slot compatibility in renderers.
+      # Phoenix's render_slot expects the full slot structure, not just inner_block.
       %{
         field: field,
         label: Map.get(slot, :label, parsed_column.label),
@@ -454,6 +610,7 @@ defmodule Cinder.Collection do
         sortable: parsed_column.sortable,
         class: Map.get(slot, :class, ""),
         inner_block: slot[:inner_block] || default_inner_block(field),
+        slot: slot,
         filter_fn: parsed_column.filter_fn,
         searchable: parsed_column.searchable,
         sort_cycle: sort_config.cycle || [nil, :asc, :desc],
@@ -501,7 +658,8 @@ defmodule Cinder.Collection do
 
       # Build filter configuration in unified format for determine_filter_type
       base_options = if filter_value, do: [value: filter_value], else: []
-      all_options = base_options ++ extra_options ++ (filter_options || [])
+      # Note: filter_options is already included in extra_options as `options: filter_options`
+      all_options = base_options ++ extra_options
 
       filter_config =
         if filter_type do
@@ -565,9 +723,38 @@ defmodule Cinder.Collection do
   end
 
   @doc """
-  Merge column filters and filter-only slots, checking for field conflicts.
+  Builds the list of columns used for query operations (filtering AND searching).
+
+  This function combines:
+  - **Filterable columns**: needed for filter application
+  - **Searchable columns**: needed for search even if not filterable
+  - **Filter-only slots**: dedicated filter controls not tied to display columns
+
+  NOTE: Sortable-only columns are NOT included here - sorting uses display_columns
+  because sort controls are tied to column headers.
+
+  Raises `ArgumentError` if the same field is defined in both a filterable column
+  and a filter-only slot.
   """
+  def build_query_columns(processed_columns, processed_filter_slots) do
+    validate_no_field_conflicts!(processed_columns, processed_filter_slots)
+
+    # Include columns that participate in query operations (filter OR search)
+    query_relevant_columns =
+      Enum.filter(processed_columns, fn col ->
+        col.filterable or Map.get(col, :searchable, false)
+      end)
+
+    query_relevant_columns ++ processed_filter_slots
+  end
+
+  # Kept for backward compatibility - delegates to build_query_columns
+  @doc false
   def merge_filter_configurations(processed_columns, processed_filter_slots) do
+    build_query_columns(processed_columns, processed_filter_slots)
+  end
+
+  defp validate_no_field_conflicts!(processed_columns, processed_filter_slots) do
     column_fields =
       processed_columns
       |> Enum.filter(& &1.filterable)
@@ -590,8 +777,7 @@ defmodule Cinder.Collection do
               "Use either column filtering or filter-only slots, not both for the same field."
     end
 
-    column_filters = Enum.filter(processed_columns, & &1.filterable)
-    column_filters ++ processed_filter_slots
+    :ok
   end
 
   @doc """
@@ -604,7 +790,7 @@ defmodule Cinder.Collection do
     case search_config do
       nil ->
         if has_searchable_columns do
-          {"Search", "Search...", true, nil}
+          {dgettext("cinder", "Search"), dgettext("cinder", "Search..."), true, nil}
         else
           {nil, nil, false, nil}
         end
@@ -613,14 +799,14 @@ defmodule Cinder.Collection do
         {nil, nil, false, nil}
 
       config when is_list(config) ->
-        label = Keyword.get(config, :label, "Search")
-        placeholder = Keyword.get(config, :placeholder, "Search...")
+        label = Keyword.get(config, :label, dgettext("cinder", "Search"))
+        placeholder = Keyword.get(config, :placeholder, dgettext("cinder", "Search..."))
         search_fn = Keyword.get(config, :fn)
         {label, placeholder, true, search_fn}
 
       _invalid ->
         if has_searchable_columns do
-          {"Search", "Search...", true, nil}
+          {dgettext("cinder", "Search"), dgettext("cinder", "Search..."), true, nil}
         else
           {nil, nil, false, nil}
         end
@@ -645,6 +831,16 @@ defmodule Cinder.Collection do
   defp normalize_layout("grid"), do: :grid
   defp normalize_layout(layout) when is_atom(layout), do: layout
   defp normalize_layout(_), do: :table
+
+  defp normalize_sort_mode("exclusive"), do: :exclusive
+  defp normalize_sort_mode("additive"), do: :additive
+  defp normalize_sort_mode(:exclusive), do: :exclusive
+  defp normalize_sort_mode(:additive), do: :additive
+  defp normalize_sort_mode(_), do: :additive
+
+  defp normalize_show_filters("toggle"), do: :toggle
+  defp normalize_show_filters("toggle_open"), do: :toggle_open
+  defp normalize_show_filters(other), do: other
 
   defp layout_class(:table), do: "cinder-table"
   defp layout_class(:list), do: "cinder-list"
@@ -683,14 +879,24 @@ defmodule Cinder.Collection do
   # PRIVATE HELPERS - Show/Hide Logic
   # ============================================================================
 
-  defp determine_show_filters(%{show_filters: explicit}, _columns, _search_enabled)
-       when is_boolean(explicit) do
-    explicit
-  end
+  defp determine_show_filters(assigns, columns, search_enabled) do
+    explicit = Map.get(assigns, :show_filters)
+    has_content = Enum.any?(columns, & &1.filterable) or search_enabled
 
-  defp determine_show_filters(_assigns, columns, search_enabled) do
-    has_filterable = Enum.any?(columns, & &1.filterable)
-    has_filterable or search_enabled
+    mode =
+      case explicit do
+        nil -> Application.get_env(:cinder, :show_filters, nil)
+        other -> other
+      end
+
+    case normalize_show_filters(mode) do
+      false -> false
+      true -> has_content
+      :toggle -> if has_content, do: :toggle, else: false
+      :toggle_open -> if has_content, do: :toggle_open, else: false
+      # nil = auto-detect (backwards compat)
+      _ -> has_content
+    end
   end
 
   defp determine_show_sort(%{show_sort: explicit}, _columns) when is_boolean(explicit) do
@@ -700,42 +906,6 @@ defmodule Cinder.Collection do
   defp determine_show_sort(_assigns, columns) do
     Enum.any?(columns, & &1.sortable)
   end
-
-  # ============================================================================
-  # PRIVATE HELPERS - Page Size
-  # ============================================================================
-
-  defp parse_page_size_config(page_size) when is_integer(page_size) do
-    %{
-      selected_page_size: page_size,
-      page_size_options: [],
-      default_page_size: page_size,
-      configurable: false
-    }
-  end
-
-  defp parse_page_size_config(config) when is_list(config) do
-    default = Keyword.get(config, :default, 25)
-    options = Keyword.get(config, :options, [])
-
-    valid_options =
-      if is_list(options) and Enum.all?(options, &is_integer/1) do
-        options
-      else
-        []
-      end
-
-    configurable = length(valid_options) > 1
-
-    %{
-      selected_page_size: default,
-      page_size_options: valid_options,
-      default_page_size: default,
-      configurable: configurable
-    }
-  end
-
-  defp parse_page_size_config(_invalid), do: parse_page_size_config(25)
 
   # ============================================================================
   # PRIVATE HELPERS - Pagination Mode

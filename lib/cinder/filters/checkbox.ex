@@ -26,7 +26,6 @@ defmodule Cinder.Filters.Checkbox do
   @behaviour Cinder.Filter
   use Phoenix.Component
 
-  require Ash.Query
   import Cinder.Filter
 
   @impl true
@@ -63,7 +62,7 @@ defmodule Cinder.Filters.Checkbox do
     }
 
     ~H"""
-    <div class={@theme.filter_checkbox_container_class} {@theme.filter_checkbox_container_data}>
+    <div class={@theme.filter_checkbox_container_class} data-key="filter_checkbox_container_class">
       <label class="flex items-center cursor-pointer">
         <input
           type="checkbox"
@@ -71,9 +70,9 @@ defmodule Cinder.Filters.Checkbox do
           value={to_string(@filter_value)}
           checked={@checked}
           class={@theme.filter_checkbox_input_class}
-          {@theme.filter_checkbox_input_data}
+          data-key="filter_checkbox_input_class"
         />
-        <span class={@theme.filter_checkbox_label_class} {@theme.filter_checkbox_label_data}>
+        <span class={@theme.filter_checkbox_label_class} data-key="filter_checkbox_label_class">
           {@label}
         </span>
       </label>

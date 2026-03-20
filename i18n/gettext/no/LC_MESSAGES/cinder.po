@@ -1,0 +1,200 @@
+## "msgid"s in this file come from POT (.pot) files.
+###
+### Do not add, change, or remove "msgid"s manually here as
+### they're tied to the ones in the corresponding POT file
+### (with the same domain).
+###
+### Use "mix gettext.extract --merge" or "mix gettext.merge"
+### to merge POT files into PO files.
+msgid ""
+msgstr ""
+"Language: no\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: lib/cinder/controls.ex
+#, elixir-autogen
+msgid "Clear all"
+msgstr "Fjern alle"
+
+#: lib/cinder/filter_manager.ex
+#, elixir-autogen
+msgid "Clear filter"
+msgstr "Fjern filter"
+
+#: lib/cinder/controls.ex
+#, elixir-autogen
+msgid "active"
+msgid_plural "active"
+msgstr[0] "aktiv"
+msgstr[1] "aktive"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen
+msgid "Page %{current} of %{total}"
+msgstr "Side %{current} av %{total}"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen
+msgid "showing %{start}-%{end} of %{total}"
+msgstr "viser %{start}-%{end} av %{total}"
+
+#: lib/cinder/filters/date_range.ex
+#: lib/cinder/filters/number_range.ex
+#, elixir-autogen
+msgid "to"
+msgstr "til"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen
+msgid "Next page"
+msgstr "Neste side"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen
+msgid "Previous page"
+msgstr "Forrige side"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen
+msgid "First page"
+msgstr "Første side"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen
+msgid "Last page"
+msgstr "Siste side"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen
+msgid "Go to page %{page}"
+msgstr "Gå til side %{page}"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "%{total} items"
+msgstr "%{total} elementer"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Next"
+msgstr "Neste"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Prev"
+msgstr "Forrige"
+
+#: lib/cinder/collection.ex
+#, elixir-autogen, elixir-format
+msgid "Filters"
+msgstr "Filtre"
+
+#: lib/cinder/collection.ex
+#, elixir-autogen, elixir-format
+msgid "Sort by:"
+msgstr "Sorter etter:"
+
+#: lib/cinder/filters/text.ex
+#, elixir-autogen, elixir-format
+msgid "Filter %{label}..."
+msgstr "Filtrer %{label}..."
+
+#: lib/cinder/filters/date_range.ex
+#, elixir-autogen, elixir-format
+msgid "From"
+msgstr "Fra"
+
+#: lib/cinder/filters/number_range.ex
+#, elixir-autogen, elixir-format
+msgid "Max"
+msgstr "Maks"
+
+#: lib/cinder/filters/number_range.ex
+#, elixir-autogen, elixir-format
+msgid "Min"
+msgstr "Min"
+
+#: lib/cinder/filters/autocomplete.ex
+#, elixir-autogen, elixir-format
+msgid "Search %{label}..."
+msgstr "Søk %{label}..."
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Show {selector} per page"
+msgstr "Vis {selector} per side"
+
+#: lib/cinder/filters/date_range.ex
+#, elixir-autogen, elixir-format
+msgid "To"
+msgstr "Til"
+
+#: lib/cinder/filter_manager.ex
+#: lib/cinder/filters/select.ex
+#, elixir-autogen, elixir-format
+msgid "All %{label}"
+msgstr "Alle %{label}"
+
+#: lib/cinder/collection.ex
+#: lib/cinder/controls.ex
+#, elixir-autogen, elixir-format
+msgid "Search"
+msgstr "Søk"
+
+#: lib/cinder/collection.ex
+#: lib/cinder/controls.ex
+#, elixir-autogen, elixir-format
+msgid "Search..."
+msgstr "Søk..."
+
+#: lib/cinder/filters/multi_select.ex
+#, elixir-autogen, elixir-format
+msgid "Select options..."
+msgstr "Velg alternativer..."
+
+#: lib/cinder/controls.ex
+#, elixir-autogen, elixir-format
+msgid "Clear search"
+msgstr "Fjern søk"
+
+#: lib/cinder/collection.ex
+#, elixir-autogen, elixir-format
+msgid "Loading..."
+msgstr "Laster..."
+
+#: lib/cinder/filters/multi_select.ex
+#: lib/cinder/filters/select.ex
+#, elixir-autogen, elixir-format
+msgid "No options available"
+msgstr "Ingen alternativer tilgjengelig"
+
+#: lib/cinder/collection.ex
+#: lib/cinder/filters/autocomplete.ex
+#, elixir-autogen, elixir-format
+msgid "No results found"
+msgstr "Ingen resultater funnet"
+
+#: lib/cinder/filters/multi_select.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} selected"
+msgstr "%{count} valgt"
+
+#: lib/cinder/filters/boolean.ex
+#, elixir-autogen, elixir-format
+msgid "False"
+msgstr "Usann"
+
+#: lib/cinder/filters/boolean.ex
+#, elixir-autogen, elixir-format
+msgid "True"
+msgstr "Sann"
+
+#: lib/cinder/filters/autocomplete.ex
+#, elixir-autogen, elixir-format
+msgid "Type to search more options..."
+msgstr "Skriv for å søke flere alternativer..."
+
+#: lib/cinder/collection.ex
+#, elixir-autogen, elixir-format
+msgid "An error occurred while loading data"
+msgstr "Det oppstod en feil under lasting av data"

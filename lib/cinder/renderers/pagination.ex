@@ -80,12 +80,12 @@ defmodule Cinder.Renderers.Pagination do
       |> assign(:has_next, AshPhoenix.LiveView.next_page?(page))
 
     ~H"""
-    <div class={@theme.pagination_wrapper_class} {@theme.pagination_wrapper_data}>
-      <div class={@theme.pagination_container_class} {@theme.pagination_container_data}>
+    <div class={@theme.pagination_wrapper_class} data-key="pagination_wrapper_class">
+      <div class={@theme.pagination_container_class} data-key="pagination_container_class">
       <!-- Left side: Page info -->
-      <div class={@theme.pagination_info_class} {@theme.pagination_info_data}>
+      <div class={@theme.pagination_info_class} data-key="pagination_info_class">
         {dgettext("cinder", "Page %{current} of %{total}", current: @page_number, total: @total_pages)}
-        <span class={@theme.pagination_count_class} {@theme.pagination_count_data}>
+        <span class={@theme.pagination_count_class} data-key="pagination_count_class">
           ({dgettext("cinder", "showing %{start}-%{end} of %{total}", start: @start_index, end: @end_index, total: @total_count)})
         </span>
       </div>
@@ -93,12 +93,12 @@ defmodule Cinder.Renderers.Pagination do
       <!-- Right side: Page size selector and navigation -->
       <div class="flex items-center space-x-6">
         <!-- Page size selector (if configurable) -->
-        <div :if={@page_size_config.configurable} class={@theme.page_size_container_class} {@theme.page_size_container_data}>
-          <.page_size_selector page_size_config={@page_size_config} theme={@theme} myself={@myself} />
+        <div :if={@page_size_config.configurable} class={@theme.page_size_container_class} data-key="page_size_container_class">
+          <.page_size_selector page_size_config={@page_size_config} theme={@theme} myself={@myself} id={@id} />
         </div>
 
         <!-- Page navigation -->
-        <div class={@theme.pagination_nav_class} {@theme.pagination_nav_data}>
+        <div class={@theme.pagination_nav_class} data-key="pagination_nav_class">
           <!-- First page and previous -->
           <button
             :if={@page_number > 2}
@@ -106,7 +106,7 @@ defmodule Cinder.Renderers.Pagination do
             phx-value-page="1"
             phx-target={@myself}
             class={@theme.pagination_button_class}
-            {@theme.pagination_button_data}
+            data-key="pagination_button_class"
             title={dgettext("cinder", "First page")}
           >
             &laquo;
@@ -118,7 +118,7 @@ defmodule Cinder.Renderers.Pagination do
             phx-value-page={@page_number - 1}
             phx-target={@myself}
             class={@theme.pagination_button_class}
-            {@theme.pagination_button_data}
+            data-key="pagination_button_class"
             title={dgettext("cinder", "Previous page")}
           >
             &lsaquo;
@@ -132,12 +132,12 @@ defmodule Cinder.Renderers.Pagination do
               phx-value-page={page}
               phx-target={@myself}
               class={@theme.pagination_button_class}
-              {@theme.pagination_button_data}
+              data-key="pagination_button_class"
               title={dgettext("cinder", "Go to page %{page}", %{page: page})}
             >
               {page}
             </button>
-            <span :if={page == @page_number} class={@theme.pagination_current_class} {@theme.pagination_current_data}>
+            <span :if={page == @page_number} class={@theme.pagination_current_class} data-key="pagination_current_class">
               {page}
             </span>
           </span>
@@ -149,7 +149,7 @@ defmodule Cinder.Renderers.Pagination do
             phx-value-page={@page_number + 1}
             phx-target={@myself}
             class={@theme.pagination_button_class}
-            {@theme.pagination_button_data}
+            data-key="pagination_button_class"
             title={dgettext("cinder", "Next page")}
           >
             &rsaquo;
@@ -161,7 +161,7 @@ defmodule Cinder.Renderers.Pagination do
             phx-value-page={@total_pages}
             phx-target={@myself}
             class={@theme.pagination_button_class}
-            {@theme.pagination_button_data}
+            data-key="pagination_button_class"
             title={dgettext("cinder", "Last page")}
           >
             &raquo;
@@ -194,28 +194,28 @@ defmodule Cinder.Renderers.Pagination do
       |> assign(:has_next, has_next)
 
     ~H"""
-    <div class={@theme.pagination_wrapper_class} {@theme.pagination_wrapper_data}>
-      <div class={@theme.pagination_container_class} {@theme.pagination_container_data}>
+    <div class={@theme.pagination_wrapper_class} data-key="pagination_wrapper_class">
+      <div class={@theme.pagination_container_class} data-key="pagination_container_class">
       <!-- Left side: Count info -->
-      <div class={@theme.pagination_info_class} {@theme.pagination_info_data}>
+      <div class={@theme.pagination_info_class} data-key="pagination_info_class">
         {dgettext("cinder", "%{total} items", total: @total_count)}
       </div>
 
       <!-- Right side: Page size selector and navigation -->
       <div class="flex items-center space-x-6">
         <!-- Page size selector (if configurable) -->
-        <div :if={@page_size_config.configurable} class={@theme.page_size_container_class} {@theme.page_size_container_data}>
-          <.page_size_selector page_size_config={@page_size_config} theme={@theme} myself={@myself} />
+        <div :if={@page_size_config.configurable} class={@theme.page_size_container_class} data-key="page_size_container_class">
+          <.page_size_selector page_size_config={@page_size_config} theme={@theme} myself={@myself} id={@id} />
         </div>
 
         <!-- Keyset navigation: Prev / Next only -->
-        <div class={@theme.pagination_nav_class} {@theme.pagination_nav_data}>
+        <div class={@theme.pagination_nav_class} data-key="pagination_nav_class">
           <!-- Previous page -->
           <button
             phx-click="prev_page"
             phx-target={@myself}
             class={@theme.pagination_button_class}
-            {@theme.pagination_button_data}
+            data-key="pagination_button_class"
             disabled={!@has_prev}
             title={dgettext("cinder", "Previous page")}
           >
@@ -227,7 +227,7 @@ defmodule Cinder.Renderers.Pagination do
             phx-click="next_page"
             phx-target={@myself}
             class={@theme.pagination_button_class}
-            {@theme.pagination_button_data}
+            data-key="pagination_button_class"
             disabled={!@has_next}
             title={dgettext("cinder", "Next page")}
           >
@@ -241,17 +241,29 @@ defmodule Cinder.Renderers.Pagination do
   end
 
   defp page_size_selector(assigns) do
+    dropdown_id = "#{assigns.id}-page-size-options"
+    # Split the translated string on {selector} to allow flexible word order
+    [before_selector, after_selector] =
+      dgettext("cinder", "Show {selector} per page")
+      |> String.split("{selector}")
+
+    assigns =
+      assigns
+      |> assign(:dropdown_id, dropdown_id)
+      |> assign(:before_selector, before_selector)
+      |> assign(:after_selector, after_selector)
+
     ~H"""
     <div class="flex items-center space-x-2">
-      <span class={@theme.page_size_label_class} {@theme.page_size_label_data}>
-        Show
+      <span :if={@before_selector != ""} class={@theme.page_size_label_class} data-key="page_size_label_class">
+        {@before_selector}
       </span>
       <div class="relative">
         <button
           type="button"
           class={@theme.page_size_dropdown_class}
-          {@theme.page_size_dropdown_data}
-          phx-click={JS.toggle(to: "#page-size-options")}
+          data-key="page_size_dropdown_class"
+          phx-click={JS.toggle(to: "##{@dropdown_id}")}
           aria-haspopup="true"
           aria-expanded="false"
         >
@@ -261,10 +273,10 @@ defmodule Cinder.Renderers.Pagination do
           </svg>
         </button>
         <div
-          id="page-size-options"
+          id={@dropdown_id}
           class={["absolute top-full right-0 mt-1 z-50 hidden", @theme.page_size_dropdown_container_class]}
-          {@theme.page_size_dropdown_container_data}
-          phx-click-away={JS.hide(to: "#page-size-options")}
+          data-key="page_size_dropdown_container_class"
+          phx-click-away={JS.hide(to: "##{@dropdown_id}")}
         >
           <button
             :for={option <- @page_size_config.page_size_options}
@@ -273,8 +285,8 @@ defmodule Cinder.Renderers.Pagination do
               @theme.page_size_option_class,
               (@page_size_config.selected_page_size == option && @theme.page_size_selected_class || "")
             ]}
-            {@theme.page_size_option_data}
-            phx-click={JS.push("change_page_size") |> JS.hide(to: "#page-size-options")}
+            data-key="page_size_option_class"
+            phx-click={JS.push("change_page_size") |> JS.hide(to: "##{@dropdown_id}")}
             phx-value-page_size={option}
             phx-target={@myself}
           >
@@ -282,8 +294,8 @@ defmodule Cinder.Renderers.Pagination do
           </button>
         </div>
       </div>
-      <span class={@theme.page_size_label_class} {@theme.page_size_label_data}>
-        per page
+      <span :if={@after_selector != ""} class={@theme.page_size_label_class} data-key="page_size_label_class">
+        {@after_selector}
       </span>
     </div>
     """

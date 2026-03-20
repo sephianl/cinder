@@ -11,6 +11,8 @@ defmodule Cinder.FilterManager do
   alias Cinder.Filters.Registry
   use Cinder.Messages
 
+  import Cinder.Filter, only: [filter_id: 2, filter_id: 3]
+
   @type filter_type ::
           :text
           | :select
@@ -19,6 +21,7 @@ defmodule Cinder.FilterManager do
           | :date_range
           | :number_range
           | :boolean
+          | :radio_group
           | :checkbox
   @type filter_value ::
           String.t()
@@ -48,100 +51,129 @@ defmodule Cinder.FilterManager do
   HEEx template for filter controls
   """
   def render_filter_controls(assigns) do
-    filterable_columns = Enum.filter(assigns.columns, & &1.filterable)
-    active_filters = count_active_filters(assigns.filters)
-    filter_values = build_filter_values(filterable_columns, assigns.filters)
-    raw_filter_params = Map.get(assigns, :raw_filter_params, %{})
+    controls_slot = Map.get(assigns, :controls_slot, [])
+
+    if controls_slot != [] do
+      render_filter_controls_with_slot(assigns, controls_slot)
+    else
+      render_filter_controls_default(assigns)
+    end
+  end
+
+  defp render_filter_controls_with_slot(assigns, controls_slot) do
+    controls_data = Cinder.Controls.build_controls_data(assigns)
+    has_content = controls_data.filters != [] or controls_data.search != nil
 
     assigns =
       assigns
-      |> assign(:filterable_columns, filterable_columns)
-      |> assign(:active_filters, active_filters)
-      |> assign(:filter_values, filter_values)
-      |> assign(:raw_filter_params, raw_filter_params)
+      |> assign(:controls_data, controls_data)
+      |> assign(:controls_slot, controls_slot)
+      |> assign(:has_content, has_content)
 
     ~H"""
-    <!-- Filter Controls (including search) -->
-    <div :if={@filterable_columns != [] or Map.get(assigns, :show_search, false)} class={@theme.filter_container_class} {@theme.filter_container_data}>
-      <!-- Filter Header -->
-      <div class={@theme.filter_header_class} {@theme.filter_header_data}>
-        <span class={@theme.filter_title_class} {@theme.filter_title_data}>
-          {@filters_label}
-          <span class={[@theme.filter_count_class, if(@active_filters == 0, do: "invisible", else: "")]} {@theme.filter_count_data}>
-            ({@active_filters} {dngettext("cinder", "active", "active", @active_filters)})
-          </span>
-        </span>
-        <button
-          :if={@filterable_columns != []}
-          phx-click="clear_all_filters"
-          phx-target={@target}
-          class={[@theme.filter_clear_all_class, if(@active_filters == 0, do: "invisible", else: "")]}
-          {@theme.filter_clear_all_data}
-        >
-          {dgettext("cinder", "Clear all")}
-        </button>
-      </div>
-
+    <div :if={@has_content} class={@theme.filter_container_class} data-key="filter_container_class">
       <form phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
-        <div class={@theme.filter_inputs_class} {@theme.filter_inputs_data}>
-          <!-- Search Input (if enabled) - as first filter -->
-          <div :if={Map.get(assigns, :show_search, false)} class={@theme.filter_input_wrapper_class} {@theme.filter_input_wrapper_data}>
-            <label class={@theme.filter_label_class} {@theme.filter_label_data}>{Map.get(assigns, :search_label, "Search")}:</label>
-            <div class="flex items-center space-x-2">
-              <div class="flex-1 relative">
-                <input
-                  type="text"
-                  name="search"
-                  value={Map.get(assigns, :search_term, "")}
-                  placeholder={Map.get(assigns, :search_placeholder, "Search...")}
-                  phx-debounce="300"
-                  class={@theme.search_input_class}
-                  {@theme.search_input_data}
-                />
-                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <svg class={@theme.search_icon_class} {@theme.search_icon_data} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-              </div>
-
-              <!-- Clear search button - consistent with filter clear buttons -->
-              <button
-                type="button"
-                phx-click="clear_filter"
-                phx-value-key="search"
-                phx-target={@target}
-                class={[
-                  @theme.filter_clear_button_class,
-                  unless(Map.get(assigns, :search_term, "") != "", do: "invisible", else: "")
-                ]}
-                {@theme.filter_clear_button_data}
-                title="Clear search"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-
-          <div :for={column <- @filterable_columns} class={@theme.filter_input_wrapper_class} {@theme.filter_input_wrapper_data}>
-            <label class={[
-              @theme.filter_label_class,
-              if(column.filter_type == :checkbox, do: "invisible", else: "")
-            ]} {@theme.filter_label_data}>{column.label}:</label>
-            <.filter_input
-              column={column}
-              current_value={Map.get(@filter_values, column.field, "")}
-              filter_values={@filter_values}
-              raw_filter_params={@raw_filter_params}
-              theme={@theme}
-              target={@target}
-            />
-          </div>
-        </div>
+        {render_slot(@controls_slot, @controls_data)}
       </form>
     </div>
     """
   end
+
+  defp render_filter_controls_default(assigns) do
+    controls_data = Cinder.Controls.build_controls_data(assigns)
+    has_content = controls_data.filters != [] or controls_data.search != nil
+    filter_mode = Map.get(assigns, :filter_mode, true)
+    collapsible = filter_mode in [:toggle, :toggle_open]
+    initially_collapsed = filter_mode == :toggle
+
+    assigns =
+      assigns
+      |> assign(:controls_data, controls_data)
+      |> assign(:has_content, has_content)
+      |> assign(:collapsible, collapsible)
+      |> assign(:initially_collapsed, initially_collapsed)
+
+    ~H"""
+    <div :if={@has_content} class={@theme.filter_container_class} data-key="filter_container_class">
+      <Cinder.Controls.render_header
+        table_id={@table_id}
+        filters_label={@filters_label}
+        active_filter_count={@controls_data.active_filter_count}
+        filter_mode={@controls_data.filter_mode}
+        target={@target}
+        theme={@theme}
+        has_filters={@controls_data.filters != []}
+
+      />
+
+      <div id={"#{@table_id}-filter-body"} class={if(@collapsible and @initially_collapsed, do: "hidden")}>
+        <form phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
+          <div class={@theme.filter_inputs_class} data-key="filter_inputs_class">
+            <Cinder.Controls.render_search
+              :if={@controls_data.search != nil}
+              search={@controls_data.search}
+              theme={@theme}
+              target={@target}
+            />
+            <Cinder.Controls.render_filter
+              :for={{_name, filter} <- @controls_data.filters}
+              filter={filter}
+              theme={@theme}
+              target={@target}
+              filter_values={@controls_data.filter_values}
+              raw_filter_params={@controls_data.raw_filter_params}
+            />
+          </div>
+        </form>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a filter label with appropriate accessibility attributes based on filter type.
+  """
+  def filter_label(assigns) do
+    ~H"""
+    <label
+      class={[
+        @theme.filter_label_class,
+        if(@column.filter_type == :checkbox, do: "invisible", else: "")
+      ]}
+      for={label_for_attr(@column.filter_type, @table_id, @column.field)}
+      phx-click={label_click_action(@column.filter_type, @table_id, @column.field)}
+      data-key="filter_label_class"
+    >{filter_label_text(@column)}:</label>
+    """
+  end
+
+  defp filter_label_text(column) do
+    case Keyword.get(column.filter_options || [], :label) do
+      nil -> column.label
+      label -> label
+    end
+  end
+
+  # For single-input filters, return the filter ID for the `for` attribute
+  defp label_for_attr(filter_type, table_id, field) when filter_type in [:text, :autocomplete] do
+    filter_id(table_id, field)
+  end
+
+  # For range filters, point to the first (min/from) input
+  defp label_for_attr(:number_range, table_id, field), do: filter_id(table_id, field, "min")
+  defp label_for_attr(:date_range, table_id, field), do: filter_id(table_id, field, "from")
+
+  # For dropdown filters, point to the button
+  defp label_for_attr(filter_type, table_id, field)
+       when filter_type in [:select, :multi_select] do
+    "#{filter_id(table_id, field)}-button"
+  end
+
+  # For group filters, no `for` attribute (inner labels work)
+  defp label_for_attr(_filter_type, _table_id, _field), do: nil
+
+  # No click action needed - `for` attribute handles focus/activation
+  defp label_click_action(_filter_type, _table_id, _field), do: nil
 
   @doc """
   Renders an individual filter input by delegating to the appropriate filter module.
@@ -154,6 +186,7 @@ defmodule Cinder.FilterManager do
       if filter_module do
         # Build additional assigns for filter modules
         filter_assigns = %{
+          table_id: assigns.table_id,
           target: assigns.target,
           filter_values: assigns.filter_values,
           raw_filter_params: Map.get(assigns, :raw_filter_params, %{})
@@ -201,7 +234,13 @@ defmodule Cinder.FilterManager do
         # Fallback to text filter if type not found
         fallback_column = Map.put(assigns.column, :filter_type, :text)
         text_module = Registry.get_filter(:text)
-        filter_assigns = %{target: assigns.target, filter_values: assigns.filter_values}
+
+        filter_assigns = %{
+          table_id: assigns.table_id,
+          target: assigns.target,
+          filter_values: assigns.filter_values
+        }
+
         text_module.render(fallback_column, assigns.current_value, assigns.theme, filter_assigns)
       end
 
@@ -209,7 +248,7 @@ defmodule Cinder.FilterManager do
     assigns = assign(assigns, :filter_content, filter_content)
 
     ~H"""
-    <div class="flex items-center space-x-2">
+    <div class="flex items-center">
       <div class="flex-1">
         <%= @filter_content %>
       </div>
@@ -224,7 +263,7 @@ defmodule Cinder.FilterManager do
           @theme.filter_clear_button_class,
           unless(@current_value != "" and not is_nil(@current_value) and @current_value != [] and @current_value != %{from: "", to: ""} and @current_value != %{min: "", max: ""}, do: "invisible", else: "")
         ]}
-        {@theme.filter_clear_button_data}
+        data-key="filter_clear_button_class"
         title={dgettext("cinder", "Clear filter")}
       >
         ×
@@ -432,11 +471,18 @@ defmodule Cinder.FilterManager do
       merged_options = Keyword.merge(default_options, slot_options)
 
       # Enhance options with Ash-specific data for select/multi_select filters
+      # Use explicit label if provided, otherwise humanize the field key
+      label =
+        Map.get(slot, :label) ||
+          key
+          |> Cinder.Filter.Helpers.field_notation_from_url_safe()
+          |> Cinder.Filter.Helpers.humanize_embedded_field()
+
       enhanced_options =
         case filter_type do
-          :select -> enhance_select_options(merged_options, attribute, key)
-          :multi_select -> enhance_select_options(merged_options, attribute, key)
-          :multi_checkboxes -> enhance_select_options(merged_options, attribute, key)
+          :select -> enhance_select_options(merged_options, attribute, label)
+          :multi_select -> enhance_select_options(merged_options, attribute, label)
+          :multi_checkboxes -> enhance_select_options(merged_options, attribute, label)
           _ -> merged_options
         end
 
@@ -553,8 +599,7 @@ defmodule Cinder.FilterManager do
 
         _ ->
           # Regular field lookup
-          key_atom = if is_binary(key), do: String.to_atom(key), else: key
-          get_regular_attribute(resource, key_atom)
+          get_regular_attribute(resource, String.to_atom(key))
       end
     rescue
       _ -> nil
@@ -750,25 +795,27 @@ defmodule Cinder.FilterManager do
     end
   end
 
-  defp enhance_select_options(default_options, attribute, key) do
+  defp enhance_select_options(options, attribute, label) do
+    # Only set prompt if not already set to a truthy value
+    options =
+      if Keyword.get(options, :prompt) do
+        options
+      else
+        Keyword.put(options, :prompt, dgettext("cinder", "All %{label}", label: label))
+      end
+
     case extract_enum_options(attribute) do
       [] ->
-        # No enum options found, return defaults
-        # Convert URL-safe notation to bracket notation for proper humanization
-        converted_key = Cinder.Filter.Helpers.field_notation_from_url_safe(key)
-        humanized_key = Cinder.Filter.Helpers.humanize_embedded_field(converted_key)
+        # No enum options found, return as-is
+        options
 
-        Keyword.merge(default_options, prompt: "All #{humanized_key}")
-
-      options ->
-        # Add enum options and prompt
-        # Convert URL-safe notation to bracket notation for proper humanization
-        converted_key = Cinder.Filter.Helpers.field_notation_from_url_safe(key)
-        humanized_key = Cinder.Filter.Helpers.humanize_embedded_field(converted_key)
-
-        default_options
-        |> Keyword.put(:options, options)
-        |> Keyword.put(:prompt, "All #{humanized_key}")
+      enum_options ->
+        # Add enum options if not already set to a non-empty list
+        if Keyword.get(options, :options, []) != [] do
+          options
+        else
+          Keyword.put(options, :options, enum_options)
+        end
     end
   end
 

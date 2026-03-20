@@ -135,6 +135,68 @@ defmodule Cinder.QueryBuilderTest do
     end
   end
 
+  defmodule AggregateArtist do
+    use Ash.Resource,
+      domain: nil,
+      data_layer: Ash.DataLayer.Ets,
+      validate_domain_inclusion?: false
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:name, :string, public?: true)
+    end
+
+    calculations do
+      calculate(:name_upper, :string, expr(name))
+    end
+
+    relationships do
+      has_many(:albums, AggregateAlbum, destination_attribute: :artist_id)
+    end
+
+    aggregates do
+      count(:album_count, :albums)
+    end
+
+    actions do
+      defaults([:read])
+    end
+  end
+
+  defmodule AggregateAlbum do
+    use Ash.Resource,
+      domain: nil,
+      data_layer: Ash.DataLayer.Ets,
+      validate_domain_inclusion?: false
+
+    ets do
+      private?(true)
+    end
+
+    attributes do
+      uuid_primary_key(:id)
+      attribute(:title, :string, public?: true)
+      attribute(:artist_id, :uuid, public?: true)
+    end
+
+    relationships do
+      belongs_to :artist, AggregateArtist do
+        source_attribute(:artist_id)
+        destination_attribute(:id)
+        public?(true)
+        attribute_writable?(true)
+      end
+    end
+
+    actions do
+      defaults([:read])
+    end
+  end
+
   defmodule TestDomain do
     use Ash.Domain, validate_config_inclusion?: false
 
@@ -223,7 +285,7 @@ defmodule Cinder.QueryBuilderTest do
           assert {:error, _} = result
         end)
 
-      assert log_output =~ "Cinder table query crashed with exception for"
+      assert log_output =~ "Cinder query building crashed with exception for"
       assert log_output =~ "TestResource"
     end
 
@@ -263,7 +325,7 @@ defmodule Cinder.QueryBuilderTest do
 
       # Should show the resource name and actual error details
       assert log_output =~ "TestResourceWithCalculation"
-      assert log_output =~ "Cinder table query crashed with exception for"
+      assert log_output =~ "Cinder query building crashed with exception for"
     end
   end
 
@@ -926,6 +988,54 @@ defmodule Cinder.QueryBuilderTest do
       assert result == [{"name", :desc}, {"email", :asc}]
     end
 
+    test "extracts sorts from calculation fields" do
+      query =
+        Album
+        |> Ash.Query.for_read(:read, %{}, domain: TestDomain)
+        |> Ash.Query.sort([{:track_count, :desc}])
+
+      columns = [%{field: "title"}, %{field: "track_count"}]
+
+      result = QueryBuilder.extract_query_sorts(query, columns)
+      assert result == [{"track_count", :desc}]
+    end
+
+    test "extracts sorts from aggregate fields" do
+      query =
+        AggregateArtist
+        |> Ash.Query.new()
+        |> Ash.Query.sort([{:album_count, :asc}])
+
+      columns = [%{field: "name"}, %{field: "album_count"}]
+
+      result = QueryBuilder.extract_query_sorts(query, columns)
+      assert result == [{"album_count", :asc}]
+    end
+
+    test "extracts sorts from relationship calculation fields" do
+      query =
+        AggregateAlbum
+        |> Ash.Query.new()
+        |> Ash.Query.sort([{"artist.name_upper", :desc}])
+
+      columns = [%{field: "title"}, %{field: "artist.name_upper"}]
+
+      result = QueryBuilder.extract_query_sorts(query, columns)
+      assert result == [{"artist.name_upper", :desc}]
+    end
+
+    test "extracts sorts from relationship aggregate fields" do
+      query =
+        AggregateAlbum
+        |> Ash.Query.new()
+        |> Ash.Query.sort([{"artist.album_count", :asc}])
+
+      columns = [%{field: "title"}, %{field: "artist.album_count"}]
+
+      result = QueryBuilder.extract_query_sorts(query, columns)
+      assert result == [{"artist.album_count", :asc}]
+    end
+
     test "returns empty list for resource module" do
       result = QueryBuilder.extract_query_sorts(TestUser, [])
       assert result == []
@@ -1073,6 +1183,47 @@ defmodule Cinder.QueryBuilderTest do
 
       # This creates the confusing cycle: desc -> none -> asc -> desc -> none
       # instead of the expected: desc -> asc -> desc -> none
+    end
+
+    test "extracts sorts from embedded field calc expressions" do
+      # When sorting on embedded fields, Cinder uses calc expressions like:
+      # calc(get_path(^ref(:profile), [:first_name]))
+      # This test ensures extract_query_sorts can reverse-engineer these back to
+      # the URL-safe field notation (e.g., "profile__first_name")
+      query =
+        TestUser
+        |> Ash.Query.for_read(:read, %{}, domain: TestDomain)
+        |> QueryBuilder.apply_sorting([{"profile__first_name", :desc}])
+
+      columns = [%{field: "name"}, %{field: "profile__first_name"}]
+
+      result = QueryBuilder.extract_query_sorts(query, columns)
+      assert result == [{"profile__first_name", :desc}]
+    end
+
+    test "extracts sorts from nested embedded field calc expressions" do
+      # Test nested embedded fields like settings__address__city
+      query =
+        TestUser
+        |> Ash.Query.for_read(:read, %{}, domain: TestDomain)
+        |> QueryBuilder.apply_sorting([{"settings__address__city", :asc}])
+
+      columns = [%{field: "name"}, %{field: "settings__address__city"}]
+
+      result = QueryBuilder.extract_query_sorts(query, columns)
+      assert result == [{"settings__address__city", :asc}]
+    end
+
+    test "extracts sorts from relationship field calc expressions" do
+      query =
+        TestAlbum
+        |> Ash.Query.new()
+        |> Ash.Query.sort([{"artist.name", :desc}])
+
+      columns = [%{field: "title"}, %{field: "artist.name"}]
+
+      result = QueryBuilder.extract_query_sorts(query, columns)
+      assert result == [{"artist.name", :desc}]
     end
   end
 
@@ -1534,6 +1685,40 @@ defmodule Cinder.QueryBuilderTest do
   end
 
   describe "scope passthrough" do
+    test "preserves query actor when scope has no actor" do
+      query_with_actor =
+        TestUser
+        |> Ash.Query.for_read(:read, %{}, actor: :query_actor)
+
+      scope = %{tenant: "scope_tenant"}
+
+      options = [
+        actor: nil,
+        tenant: nil,
+        scope: scope,
+        filters: %{},
+        sort_by: [],
+        page_size: 25,
+        current_page: 1,
+        columns: [],
+        query_opts: []
+      ]
+
+      test_pid = self()
+
+      Ash
+      |> expect(:read, fn _query, opts ->
+        send(test_pid, {:ash_read_called, opts})
+        {:ok, %Ash.Page.Offset{results: [], count: 0, limit: 25, offset: 0, more?: false}}
+      end)
+
+      QueryBuilder.build_and_execute(query_with_actor, options)
+
+      assert_received {:ash_read_called, ash_opts}
+      assert Keyword.get(ash_opts, :actor) == :query_actor
+      assert Keyword.get(ash_opts, :tenant) == "scope_tenant"
+    end
+
     test "extracts actor/tenant from scope when no explicit values provided" do
       scope = %TestScope{
         current_user: :scope_actor,
@@ -1702,6 +1887,97 @@ defmodule Cinder.QueryBuilderTest do
       assert_received {:ash_read_called, ash_opts}
       assert Keyword.get(ash_opts, :actor) == :explicit_actor
       assert Keyword.get(ash_opts, :tenant) == "explicit_tenant"
+    end
+  end
+
+  describe "build_query/2" do
+    test "returns {:ok, query} with filters applied" do
+      columns = [
+        %{
+          field: "name",
+          filterable: true,
+          filter_type: :text,
+          filter_fn: nil
+        }
+      ]
+
+      filters = %{
+        "name" => %{type: :text, value: "John", operator: :contains}
+      }
+
+      options = [
+        actor: nil,
+        filters: filters,
+        sort_by: [],
+        columns: columns,
+        query_opts: [],
+        search_term: ""
+      ]
+
+      assert {:ok, %Ash.Query{} = query} = QueryBuilder.build_query(TestUser, options)
+      # The query should have a filter applied
+      assert query.filter != nil
+    end
+
+    test "returns {:ok, query} with sorts applied" do
+      options = [
+        actor: nil,
+        filters: %{},
+        sort_by: [{"name", :asc}],
+        columns: [],
+        query_opts: [],
+        search_term: ""
+      ]
+
+      assert {:ok, %Ash.Query{} = query} = QueryBuilder.build_query(TestUser, options)
+      assert query.sort != nil
+      assert query.sort != []
+    end
+
+    test "returns {:ok, query} with no pagination" do
+      options = [
+        actor: nil,
+        filters: %{},
+        sort_by: [],
+        columns: [],
+        query_opts: [],
+        search_term: "",
+        page_size: 25,
+        current_page: 2
+      ]
+
+      # build_query should NOT apply pagination even if page_size/current_page are passed
+      assert {:ok, %Ash.Query{}} = QueryBuilder.build_query(TestUser, options)
+    end
+
+    test "returns {:error, _} for invalid sort fields" do
+      options = [
+        actor: nil,
+        filters: %{},
+        sort_by: [{"nonexistent_field", :asc}],
+        columns: [],
+        query_opts: [],
+        search_term: ""
+      ]
+
+      assert {:error, _message} = QueryBuilder.build_query(TestUser, options)
+    end
+
+    test "build_and_execute delegates to build_query internally" do
+      options = [
+        actor: nil,
+        filters: %{},
+        sort_by: [{"name", :asc}],
+        page_size: 10,
+        current_page: 1,
+        columns: [],
+        query_opts: [],
+        search_term: ""
+      ]
+
+      result = QueryBuilder.build_and_execute(TestUser, options)
+      assert {:ok, page} = result
+      assert is_list(page.results)
     end
   end
 end

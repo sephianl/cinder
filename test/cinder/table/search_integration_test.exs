@@ -411,48 +411,144 @@ defmodule Cinder.Table.SearchIntegrationTest do
     end
   end
 
-  test "search works through filter_change event like other filters" do
-    # Test that search now uses the same form-based filter_change event
-    # instead of the dedicated search_change event for consistency
+  describe "build_query_columns capability matrix" do
+    # This test suite verifies the column inclusion logic in build_query_columns
+    # to prevent regressions like the searchable columns being excluded bug.
+    #
+    # Matrix:
+    # | Capability           | In query_columns? | In display_columns? |
+    # |----------------------|-------------------|---------------------|
+    # | searchable only      | ✅                | ✅                  |
+    # | filterable only      | ✅                | ✅                  |
+    # | sortable only        | ❌                | ✅                  |
+    # | searchable+filterable| ✅                | ✅                  |
+    # | filter-only slot     | ✅                | ❌                  |
 
-    # Simulate filter_change event with search parameter
-    filter_change_params = %{
-      "search" => "test search query",
-      "filters" => %{
-        "name" => "john",
-        "age_min" => "25"
-      }
-    }
+    test "searchable-only columns are included in query_columns" do
+      col_slots = [
+        %{field: "name", search: true, filter: false, sort: false, label: "Name"}
+      ]
 
-    # Test that both search and filters are processed in the same event
-    search_term = Map.get(filter_change_params, "search")
-    filter_params = Map.get(filter_change_params, "filters")
+      processed = Cinder.Collection.process_columns(col_slots, SearchTestResource)
+      query_cols = Cinder.Collection.build_query_columns(processed, [])
 
-    assert search_term == "test search query"
-    assert filter_params == %{"name" => "john", "age_min" => "25"}
+      assert length(query_cols) == 1
+      assert hd(query_cols).field == "name"
+      assert hd(query_cols).searchable == true
+      assert hd(query_cols).filterable == false
+    end
 
-    # Test filter_change with only search parameter
-    search_only_params = %{"search" => "search only"}
-    search_only_term = Map.get(search_only_params, "search")
-    search_only_filters = Map.get(search_only_params, "filters")
+    test "filterable-only columns are included in query_columns" do
+      col_slots = [
+        %{field: "status", search: false, filter: true, sort: false, label: "Status"}
+      ]
 
-    assert search_only_term == "search only"
-    assert search_only_filters == nil
+      processed = Cinder.Collection.process_columns(col_slots, SearchTestResource)
+      query_cols = Cinder.Collection.build_query_columns(processed, [])
 
-    # Test filter_change with only filters parameter
-    filters_only_params = %{"filters" => %{"status" => "active"}}
-    filters_only_term = Map.get(filters_only_params, "search")
-    filters_only_filters = Map.get(filters_only_params, "filters")
+      assert length(query_cols) == 1
+      assert hd(query_cols).field == "status"
+      assert hd(query_cols).filterable == true
+      assert hd(query_cols).searchable == false
+    end
 
-    assert filters_only_term == nil
-    assert filters_only_filters == %{"status" => "active"}
+    test "sortable-only columns are NOT included in query_columns" do
+      col_slots = [
+        %{field: "status", search: false, filter: false, sort: true, label: "Status"}
+      ]
 
-    # Test empty parameters
-    empty_params = %{}
-    empty_search = Map.get(empty_params, "search")
-    empty_filters = Map.get(empty_params, "filters")
+      processed = Cinder.Collection.process_columns(col_slots, SearchTestResource)
+      query_cols = Cinder.Collection.build_query_columns(processed, [])
 
-    assert empty_search == nil
-    assert empty_filters == nil
+      # Sortable-only should NOT be in query_columns (sorting uses display columns)
+      assert Enum.empty?(query_cols)
+
+      # But it should still be in processed columns (display columns)
+      assert length(processed) == 1
+      assert hd(processed).field == "status"
+    end
+
+    test "columns with multiple capabilities are included once" do
+      col_slots = [
+        %{field: "title", search: true, filter: true, sort: true, label: "Title"}
+      ]
+
+      processed = Cinder.Collection.process_columns(col_slots, SearchTestResource)
+      query_cols = Cinder.Collection.build_query_columns(processed, [])
+
+      assert length(query_cols) == 1
+      col = hd(query_cols)
+      assert col.searchable == true
+      assert col.filterable == true
+      assert col.sortable == true
+    end
+
+    test "filter-only slots are included in query_columns but not display columns" do
+      col_slots = [
+        %{field: "title", search: true, filter: false, label: "Title"}
+      ]
+
+      filter_slots = [
+        %{field: "category", type: :select, label: "Category", options: [{"A", "a"}]}
+      ]
+
+      processed_cols = Cinder.Collection.process_columns(col_slots, SearchTestResource)
+
+      processed_filters =
+        Cinder.Collection.process_filter_slots(filter_slots, SearchTestResource)
+
+      query_cols = Cinder.Collection.build_query_columns(processed_cols, processed_filters)
+
+      # query_columns should have both
+      query_fields = Enum.map(query_cols, & &1.field)
+      assert "title" in query_fields
+      assert "category" in query_fields
+
+      # display columns (processed_cols) should only have title
+      display_fields = Enum.map(processed_cols, & &1.field)
+      assert "title" in display_fields
+      refute "category" in display_fields
+    end
+
+    test "mixed capability columns are correctly partitioned" do
+      col_slots = [
+        %{field: "title", search: true, filter: false, label: "Title"},
+        %{field: "status", search: false, filter: true, label: "Status"},
+        %{
+          field: "category",
+          search: false,
+          filter: false,
+          sort: true,
+          label: "Category Sort Only"
+        },
+        %{field: "description", search: false, filter: false, sort: false, label: "Display Only"}
+      ]
+
+      filter_slots = [
+        %{field: "filter_only_field", type: :text, label: "Filter Only"}
+      ]
+
+      processed_cols = Cinder.Collection.process_columns(col_slots, SearchTestResource)
+
+      processed_filters =
+        Cinder.Collection.process_filter_slots(filter_slots, SearchTestResource)
+
+      query_cols = Cinder.Collection.build_query_columns(processed_cols, processed_filters)
+
+      query_fields = Enum.map(query_cols, & &1.field)
+
+      # Searchable and filterable columns should be in query_columns
+      assert "title" in query_fields
+      assert "status" in query_fields
+      assert "filter_only_field" in query_fields
+
+      # Sortable-only and display-only should NOT be in query_columns
+      refute "category" in query_fields
+      refute "description" in query_fields
+
+      # All columns should be in display columns
+      display_fields = Enum.map(processed_cols, & &1.field)
+      assert length(display_fields) == 4
+    end
   end
 end

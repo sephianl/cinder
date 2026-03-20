@@ -27,9 +27,9 @@ defmodule Cinder.Filters.Autocomplete do
 
   @behaviour Cinder.Filter
   use Phoenix.Component
+  use Cinder.Messages
 
-  require Ash.Query
-  import Cinder.Filter
+  import Cinder.Filter, only: [get_option: 3, field_name: 1, filter_id: 2]
   alias Phoenix.LiveView.JS
 
   @default_max_results 10
@@ -38,7 +38,9 @@ defmodule Cinder.Filters.Autocomplete do
   def render(column, current_value, theme, assigns) do
     filter_options = Map.get(column, :filter_options, [])
     all_options = get_option(filter_options, :options, [])
-    placeholder = get_option(filter_options, :placeholder, "Search #{column.label}...")
+
+    default_placeholder = dgettext("cinder", "Search %{label}...", label: column.label)
+    placeholder = get_option(filter_options, :placeholder, default_placeholder)
     max_results = get_option(filter_options, :max_results, @default_max_results)
 
     # Get search term from raw_filter_params (submitted via form)
@@ -73,8 +75,17 @@ defmodule Cinder.Filters.Autocomplete do
       end
 
     # Sanitize field name for use in HTML attributes
+    table_id = Map.get(assigns, :table_id)
     safe_field_name = Cinder.Filter.sanitized_field_name(column.field)
-    dropdown_id = "autocomplete-dropdown-#{safe_field_name}"
+
+    # Use filter_id for consistent ID generation (or fallback for tests without table_id)
+    {dropdown_id, input_id} =
+      if table_id do
+        base_id = filter_id(table_id, column.field)
+        {"#{base_id}-dropdown", base_id}
+      else
+        {"autocomplete-dropdown-#{safe_field_name}", nil}
+      end
 
     assigns = %{
       column: column,
@@ -86,11 +97,12 @@ defmodule Cinder.Filters.Autocomplete do
       placeholder: placeholder,
       theme: theme,
       dropdown_id: dropdown_id,
+      input_id: input_id,
       target: Map.get(assigns, :target)
     }
 
     ~H"""
-    <div class={@theme.filter_select_container_class} id={@dropdown_id}>
+    <div class={@theme.filter_select_container_class} data-key="filter_select_container_class" id={@dropdown_id}>
       <!-- Hidden input for the actual filter value -->
       <input
         type="hidden"
@@ -101,11 +113,12 @@ defmodule Cinder.Filters.Autocomplete do
       <!-- Search input -->
       <input
         type="text"
+        id={@input_id}
         name={"filters[#{@column.field}_autocomplete_search]"}
         value={if @current_value != "", do: @current_label, else: @search_term}
         placeholder={@placeholder}
         class={@theme.filter_text_input_class}
-        {@theme.filter_text_input_data}
+        data-key="filter_text_input_class"
         autocomplete="off"
         phx-debounce="300"
         phx-focus={JS.show(to: "##{@dropdown_id}-options")}
@@ -115,13 +128,13 @@ defmodule Cinder.Filters.Autocomplete do
       <div
         id={"#{@dropdown_id}-options"}
         class={[@theme.filter_select_dropdown_class, "hidden"]}
-        {@theme.filter_select_dropdown_data}
+        data-key="filter_select_dropdown_class"
         phx-click-away={JS.hide(to: "##{@dropdown_id}-options")}
       >
         <label
           :for={{label, value} <- @filtered_options}
           class={[@theme.filter_select_option_class, "flex items-center cursor-pointer"]}
-          {@theme.filter_select_option_data}
+          data-key="filter_select_option_class"
         >
           <input
             type="radio"
@@ -131,7 +144,7 @@ defmodule Cinder.Filters.Autocomplete do
             class="sr-only"
             phx-click={JS.hide(to: "##{@dropdown_id}-options")}
           />
-          <span class={@theme.filter_select_label_class} {@theme.filter_select_label_data}>
+          <span class={@theme.filter_select_label_class} data-key="filter_select_label_class">
             {label}
           </span>
         </label>
@@ -139,17 +152,17 @@ defmodule Cinder.Filters.Autocomplete do
         <div
           :if={@filtered_options == []}
           class={@theme.filter_select_empty_class}
-          {@theme.filter_select_empty_data}
+          data-key="filter_select_empty_class"
         >
-          No results found
+          {dgettext("cinder", "No results found")}
         </div>
 
         <div
           :if={@has_more}
           class={[@theme.filter_select_empty_class, "text-xs italic"]}
-          {@theme.filter_select_empty_data}
+          data-key="filter_select_empty_class"
         >
-          Type to search more options...
+          {dgettext("cinder", "Type to search more options...")}
         </div>
       </div>
 

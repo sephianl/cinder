@@ -236,51 +236,35 @@ defmodule Cinder.Filter do
     end
   end
 
-  @type filter_value ::
-          String.t()
-          | [String.t()]
-          | %{from: String.t(), to: String.t()}
-          | %{min: String.t(), max: String.t()}
-          | boolean()
-          | nil
+  @typedoc "Raw filter value from form/URL input"
+  @type raw_filter_value :: any()
 
-  @type filter_options :: [
-          placeholder: String.t(),
-          prompt: String.t(),
-          options: [{String.t(), any()}],
-          operator: atom(),
-          case_sensitive: boolean(),
-          labels: %{atom() => String.t()}
-        ]
+  @typedoc "Processed filter value returned by process/2 and passed to build_query/3"
+  @type processed_filter_value :: map() | nil
 
-  @type column :: %{
-          field: String.t(),
-          label: String.t(),
-          filter_type: atom(),
-          filter_options: filter_options()
-        }
+  @typedoc "Filter options keyword list"
+  @type filter_options :: keyword()
 
-  @type theme :: %{
-          filter_input_class: String.t(),
-          filter_select_class: String.t(),
-          filter_checkbox_class: String.t(),
-          filter_date_input_class: String.t(),
-          filter_number_input_class: String.t()
-        }
+  @typedoc "Column configuration map"
+  @type column :: map()
+
+  @typedoc "Theme configuration map"
+  @type theme :: map()
 
   @doc """
   Renders the filter input component for this filter type.
 
   ## Parameters
   - `column` - Column definition with filter configuration
-  - `current_value` - Current filter value
+  - `current_value` - Current filter value (processed or nil)
   - `theme` - Theme configuration for styling
   - `assigns` - Additional assigns (target, filter_values, etc.)
 
   ## Returns
   HEEx template for the filter input
   """
-  @callback render(column(), filter_value(), theme(), map()) :: Phoenix.LiveView.Rendered.t()
+  @callback render(column(), processed_filter_value(), theme(), map()) ::
+              Phoenix.LiveView.Rendered.t()
 
   @doc """
   Processes raw form input into structured filter value.
@@ -290,9 +274,9 @@ defmodule Cinder.Filter do
   - `column` - Column definition with filter configuration
 
   ## Returns
-  Structured filter value or nil if invalid
+  Structured filter value map or nil if invalid
   """
-  @callback process(String.t() | [String.t()], column()) :: filter_value()
+  @callback process(raw_filter_value(), column()) :: processed_filter_value()
 
   @doc """
   Validates a filter value for this filter type.
@@ -303,7 +287,7 @@ defmodule Cinder.Filter do
   ## Returns
   Boolean indicating if value is valid
   """
-  @callback validate(filter_value()) :: boolean()
+  @callback validate(processed_filter_value()) :: boolean()
 
   @doc """
   Returns default options for this filter type.
@@ -322,7 +306,7 @@ defmodule Cinder.Filter do
   ## Returns
   Boolean indicating if the filter should be considered inactive
   """
-  @callback empty?(filter_value()) :: boolean()
+  @callback empty?(processed_filter_value()) :: boolean()
 
   @doc """
   Builds query filters for this filter type.
@@ -330,12 +314,12 @@ defmodule Cinder.Filter do
   ## Parameters
   - `query` - The Ash query to modify
   - `field` - The field name being filtered
-  - `filter_value` - The processed filter value
+  - `filter_value` - The processed filter value (map with :value, :type, etc.)
 
   ## Returns
   Modified Ash query with the filter applied
   """
-  @callback build_query(Ash.Query.t(), String.t(), filter_value()) :: Ash.Query.t()
+  @callback build_query(Ash.Query.t(), String.t(), map()) :: Ash.Query.t()
 
   # Shared utility functions
 
@@ -429,4 +413,26 @@ defmodule Cinder.Filter do
     field_name
     |> String.replace(~r/[^a-zA-Z0-9_-]/, "_")
   end
+
+  @doc """
+  Generates a unique HTML ID for a filter input.
+
+  When a table_id is provided, it's used as a prefix to ensure uniqueness
+  when multiple tables exist on the same page.
+
+  ## Examples
+
+      iex> Cinder.Filter.filter_id("my-table", "name")
+      "my-table-filter-name"
+
+      iex> Cinder.Filter.filter_id("users", "user.email")
+      "users-filter-user_email"
+
+      iex> Cinder.Filter.filter_id("products", "price", "min")
+      "products-filter-price-min"
+  """
+  def filter_id(table_id, field), do: "#{table_id}-filter-#{sanitized_field_name(field)}"
+
+  def filter_id(table_id, field, suffix),
+    do: "#{table_id}-filter-#{sanitized_field_name(field)}-#{suffix}"
 end

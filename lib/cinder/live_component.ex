@@ -14,7 +14,6 @@ defmodule Cinder.LiveComponent do
   """
 
   use Phoenix.LiveComponent
-  require Ash.Query
   require Logger
   use Cinder.Messages
 
@@ -41,17 +40,133 @@ defmodule Cinder.LiveComponent do
     {:ok, socket}
   end
 
+  def update(%{__update_item__: {id, update_fn}}, socket) do
+    id_field = socket.assigns[:id_field] || :id
+
+    updated_data =
+      Enum.map(socket.assigns.data || [], fn item ->
+        if Map.get(item, id_field) == id, do: update_fn.(item), else: item
+      end)
+
+    {:ok, assign(socket, :data, updated_data)}
+  end
+
+  def update(%{__update_items__: {ids, update_fn}}, socket) do
+    id_field = socket.assigns[:id_field] || :id
+    id_set = MapSet.new(ids)
+
+    updated_data =
+      Enum.map(socket.assigns.data || [], fn item ->
+        if Map.get(item, id_field) in id_set, do: update_fn.(item), else: item
+      end)
+
+    {:ok, assign(socket, :data, updated_data)}
+  end
+
+  # Single item update - raw item passed (has id field)
+  def update(%{__update_item_if_visible__: {%{} = raw_item, update_fn}}, socket) do
+    id_field = socket.assigns[:id_field] || :id
+    id = Map.get(raw_item, id_field)
+    do_update_item_if_visible(socket, id, raw_item, update_fn, id_field)
+  end
+
+  # Single item update - just ID passed
+  def update(%{__update_item_if_visible__: {id, update_fn}}, socket) do
+    id_field = socket.assigns[:id_field] || :id
+    do_update_item_if_visible(socket, id, nil, update_fn, id_field)
+  end
+
+  # Single raw item passed (not in a list)
+  def update(%{__update_items_if_visible__: {%{} = item, update_fn}}, socket) do
+    id_field = socket.assigns[:id_field] || :id
+    items_by_id = %{Map.get(item, id_field) => item}
+    do_update_items_if_visible(socket, items_by_id, update_fn, id_field)
+  end
+
+  # List of raw items passed
+  def update(%{__update_items_if_visible__: {[%{} | _] = items, update_fn}}, socket) do
+    id_field = socket.assigns[:id_field] || :id
+    items_by_id = Map.new(items, &{Map.get(&1, id_field), &1})
+    do_update_items_if_visible(socket, items_by_id, update_fn, id_field)
+  end
+
+  # List of IDs passed (use old table data)
+  def update(%{__update_items_if_visible__: {ids, update_fn}}, socket) when is_list(ids) do
+    id_field = socket.assigns[:id_field] || :id
+    do_update_items_if_visible(socket, nil, ids, update_fn, id_field)
+  end
+
   def update(assigns, socket) do
+    prev_state = data_state(socket.assigns)
+
     socket =
       socket
       |> assign(assigns)
       |> assign_defaults()
       |> assign_column_definitions()
       |> decode_url_state(assigns)
-      |> load_data_if_needed()
+      |> load_data_if_needed(prev_state)
 
     {:ok, socket}
   end
+
+  defp do_update_item_if_visible(socket, id, raw_item, update_fn, id_field) do
+    data = socket.assigns.data || []
+
+    case Enum.find(data, &(Map.get(&1, id_field) == id)) do
+      nil ->
+        {:ok, socket}
+
+      old_item ->
+        input = raw_item || old_item
+        updated = update_fn.(input)
+        updated_data = Enum.map(data, &if(Map.get(&1, id_field) == id, do: updated, else: &1))
+        {:ok, assign(socket, :data, updated_data)}
+    end
+  end
+
+  # When raw items provided as map
+  defp do_update_items_if_visible(socket, items_by_id, update_fn, id_field) do
+    do_update_items_if_visible(socket, items_by_id, Map.keys(items_by_id), update_fn, id_field)
+  end
+
+  defp do_update_items_if_visible(socket, items_by_id, ids, update_fn, id_field) do
+    data = socket.assigns.data || []
+    id_set = MapSet.new(ids)
+    visible_ids = data |> Enum.map(&Map.get(&1, id_field)) |> MapSet.new()
+    ids_to_update = MapSet.intersection(id_set, visible_ids)
+
+    if MapSet.size(ids_to_update) == 0 do
+      {:ok, socket}
+    else
+      input_items = get_input_items(data, items_by_id, ids_to_update, id_field)
+      updated_by_id = update_fn.(input_items) |> to_map_by_id(id_field)
+
+      updated_data =
+        Enum.map(data, fn item ->
+          id = Map.get(item, id_field)
+          Map.get(updated_by_id, id, item)
+        end)
+
+      {:ok, assign(socket, :data, updated_data)}
+    end
+  end
+
+  # Get input items from raw data if provided, otherwise from table data
+  defp get_input_items(_data, items_by_id, ids_to_update, _id_field) when is_map(items_by_id) do
+    ids_to_update |> Enum.map(&items_by_id[&1]) |> Enum.filter(& &1)
+  end
+
+  defp get_input_items(data, nil, ids_to_update, id_field) do
+    Enum.filter(data, &(Map.get(&1, id_field) in ids_to_update))
+  end
+
+  # Normalize function return to map
+  defp to_map_by_id(items, id_field) when is_list(items) do
+    Map.new(items, &{Map.get(&1, id_field), &1})
+  end
+
+  defp to_map_by_id(items, _id_field) when is_map(items), do: items
 
   @impl true
   def render(assigns) do
@@ -179,7 +294,13 @@ defmodule Cinder.LiveComponent do
     column = Enum.find(socket.assigns.col, &(&1.field == key))
     sort_cycle = if column, do: column.sort_cycle, else: nil
 
-    new_sort = Cinder.QueryBuilder.toggle_sort_with_cycle(current_sort, key, sort_cycle)
+    new_sort =
+      Cinder.QueryBuilder.toggle_sort_with_cycle(
+        current_sort,
+        key,
+        sort_cycle,
+        socket.assigns.sort_mode
+      )
 
     # Check if URL sync is enabled
     url_sync_enabled = !!socket.assigns[:on_state_change]
@@ -194,12 +315,12 @@ defmodule Cinder.LiveComponent do
 
     socket =
       if url_sync_enabled do
-        socket
+        assign(socket, :__reload_requested__, true)
       else
         load_data(socket)
       end
 
-    notify_state_change(socket)
+    socket = notify_state_change(socket)
 
     {:noreply, socket}
   end
@@ -225,15 +346,86 @@ defmodule Cinder.LiveComponent do
     {:noreply, socket}
   end
 
+  # ============================================================================
+  # SELECTION EVENT HANDLERS
+  # ============================================================================
+
+  @impl true
+  def handle_event("toggle_select", %{"id" => id}, socket) do
+    selected_ids = socket.assigns.selected_ids
+
+    new_selected =
+      if MapSet.member?(selected_ids, id) do
+        MapSet.delete(selected_ids, id)
+      else
+        MapSet.put(selected_ids, id)
+      end
+
+    socket =
+      socket
+      |> assign(:selected_ids, new_selected)
+      |> notify_selection_change(:toggle)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("toggle_select_all_page", _params, socket) do
+    id_field = socket.assigns[:id_field] || :id
+    page_ids = socket.assigns.data |> Enum.map(&to_string(Map.get(&1, id_field))) |> MapSet.new()
+    all_selected? = MapSet.subset?(page_ids, socket.assigns.selected_ids)
+
+    new_selected =
+      if all_selected? do
+        MapSet.difference(socket.assigns.selected_ids, page_ids)
+      else
+        MapSet.union(socket.assigns.selected_ids, page_ids)
+      end
+
+    socket =
+      socket
+      |> assign(:selected_ids, new_selected)
+      |> notify_selection_change(:select_all)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("clear_selection", _params, socket) do
+    socket =
+      socket
+      |> assign(:selected_ids, MapSet.new())
+      |> notify_selection_change(:clear)
+
+    {:noreply, socket}
+  end
+
+  # ============================================================================
+  # BULK ACTION EVENT HANDLERS
+  # ============================================================================
+
+  @impl true
+  def handle_event("bulk_action_execute", %{"index" => index}, socket) do
+    slots = socket.assigns[:bulk_action_slots] || []
+    slot = Enum.at(slots, index)
+
+    if slot do
+      execute_bulk_action(slot, socket)
+    else
+      Logger.warning("Cinder: Bulk action slot not found at index #{index}")
+      {:noreply, socket}
+    end
+  end
+
   @impl true
   def handle_event("filter_change", params, socket) do
-    filter_columns = Map.get(socket.assigns, :filter_columns, socket.assigns.columns)
+    query_columns = Map.get(socket.assigns, :query_columns, socket.assigns.columns)
 
     raw_filter_params = Map.get(params, "filters", %{})
 
     new_filters =
       raw_filter_params
-      |> Cinder.FilterManager.params_to_filters(filter_columns)
+      |> Cinder.FilterManager.params_to_filters(query_columns)
 
     search_term =
       case Map.get(params, "search") do
@@ -265,7 +457,7 @@ defmodule Cinder.LiveComponent do
 
     socket =
       if url_sync_enabled do
-        socket
+        assign(socket, :__reload_requested__, true)
       else
         load_data(socket)
       end
@@ -276,24 +468,144 @@ defmodule Cinder.LiveComponent do
   end
 
   # ============================================================================
+  # BULK ACTION HELPERS
+  # ============================================================================
+
+  defp execute_bulk_action(slot, socket) do
+    action = slot[:action]
+    selected_ids = socket.assigns.selected_ids |> MapSet.to_list()
+
+    if selected_ids == [] do
+      {:noreply, socket}
+    else
+      resource = extract_resource(socket.assigns)
+
+      if resource do
+        result =
+          Cinder.BulkActionExecutor.execute(action,
+            resource: resource,
+            ids: selected_ids,
+            id_field: socket.assigns[:id_field] || :id,
+            actor: socket.assigns[:actor],
+            tenant: socket.assigns[:tenant],
+            action_opts: slot[:action_opts] || []
+          )
+
+        handle_bulk_action_result(result, slot, socket)
+      else
+        Logger.error("Cinder: No resource configured for bulk action")
+        {:noreply, socket}
+      end
+    end
+  end
+
+  defp handle_bulk_action_result(result, slot, socket) do
+    case result do
+      {:ok, bulk_result} ->
+        handle_bulk_action_success(slot, socket, bulk_result)
+
+      {:error, reason} ->
+        handle_bulk_action_error(slot, socket, reason)
+    end
+  end
+
+  defp handle_bulk_action_success(slot, socket, result) do
+    selected_count = MapSet.size(socket.assigns.selected_ids)
+
+    socket =
+      socket
+      |> assign(:selected_ids, MapSet.new())
+      |> notify_selection_change(:clear)
+      |> load_data()
+
+    if event_name = slot[:on_success] do
+      send(
+        self(),
+        {event_name,
+         %{
+           component_id: socket.assigns.id,
+           action: slot[:action],
+           count: selected_count,
+           result: result
+         }}
+      )
+    end
+
+    {:noreply, socket}
+  end
+
+  defp handle_bulk_action_error(slot, socket, reason) do
+    Logger.error("Cinder: Bulk action failed: #{inspect(reason)}")
+
+    if event_name = slot[:on_error] do
+      send(
+        self(),
+        {event_name,
+         %{
+           component_id: socket.assigns.id,
+           action: slot[:action],
+           reason: reason
+         }}
+      )
+    end
+
+    {:noreply, socket}
+  end
+
+  defp extract_resource(assigns) do
+    case assigns[:query] do
+      %Ash.Query{resource: resource} -> resource
+      resource when is_atom(resource) and not is_nil(resource) -> resource
+      _ -> nil
+    end
+  end
+
+  defp maybe_notify_query_change(socket, nil), do: socket
+
+  defp maybe_notify_query_change(socket, query) do
+    if event_name = socket.assigns[:on_query_change] do
+      send(self(), {event_name, %{query: query, id: socket.assigns.id}})
+    end
+
+    socket
+  end
+
+  defp notify_selection_change(socket, action) do
+    if event_name = socket.assigns[:on_selection_change] do
+      payload = %{
+        component_id: socket.assigns.id,
+        selected_ids: socket.assigns.selected_ids,
+        selected_count: MapSet.size(socket.assigns.selected_ids),
+        action: action
+      }
+
+      send(self(), {event_name, payload})
+    end
+
+    socket
+  end
+
+  # ============================================================================
   # ASYNC HANDLERS
   # ============================================================================
 
   @impl true
-  def handle_async(:load_data, {:ok, {:ok, page}}, socket) do
+  def handle_async(:load_data, {:ok, {{:ok, page}, query}}, socket) do
     socket =
       socket
       |> assign(:loading, false)
+      |> assign(:error, false)
       |> assign(:data, page.results)
       |> assign(:page, page)
       # Update keyset cursors for navigation (only relevant in keyset mode)
       |> maybe_update_keyset_cursors(page)
+      |> maybe_notify_query_change(query)
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_async(:load_data, {:ok, {:error, error}}, socket) do
+  def handle_async(:load_data, {:ok, {{:error, error}, _query}}, socket) do
     Logger.error(
       "Cinder query failed for #{inspect(socket.assigns.query)}: #{inspect(error)}",
       %{
@@ -308,6 +620,7 @@ defmodule Cinder.LiveComponent do
     socket =
       socket
       |> assign(:loading, false)
+      |> assign(:error, true)
       |> assign(:data, [])
       |> assign(:page, nil)
 
@@ -330,6 +643,7 @@ defmodule Cinder.LiveComponent do
     socket =
       socket
       |> assign(:loading, false)
+      |> assign(:error, true)
       |> assign(:data, [])
       |> assign(:page, nil)
 
@@ -406,7 +720,7 @@ defmodule Cinder.LiveComponent do
       raw_params = assigns.url_raw_params
 
       decoded_filters =
-        Cinder.UrlManager.decode_filters(raw_params, socket.assigns.filter_columns)
+        Cinder.UrlManager.decode_filters(raw_params, socket.assigns.query_columns)
 
       decoded_sorts =
         Cinder.UrlManager.decode_sort(Map.get(raw_params, "sort"), socket.assigns.columns)
@@ -423,7 +737,7 @@ defmodule Cinder.LiveComponent do
 
       final_sort_by =
         cond do
-          decoded_state.sort_by != [] and not is_nil(decoded_state.sort_by) ->
+          decoded_state.sort_by != [] ->
             decoded_state.sort_by
 
           Map.get(socket.assigns, :user_has_interacted, false) ->
@@ -491,7 +805,7 @@ defmodule Cinder.LiveComponent do
 
       final_sort_by =
         cond do
-          decoded_state.sort_by != [] and not is_nil(decoded_state.sort_by) ->
+          decoded_state.sort_by != [] ->
             decoded_state.sort_by
 
           Map.get(socket.assigns, :user_has_interacted, false) ->
@@ -516,14 +830,10 @@ defmodule Cinder.LiveComponent do
   defp assign_defaults(socket) do
     assigns = socket.assigns
 
+    # Use existing page_size_config if already parsed by Collection,
+    # otherwise parse the global default
     page_size_config =
-      assigns[:page_size_config] ||
-        %{
-          selected_page_size: 25,
-          page_size_options: [],
-          default_page_size: 25,
-          configurable: false
-        }
+      assigns[:page_size_config] || Cinder.PageSize.parse(nil)
 
     selected_page_size =
       Map.get(socket.assigns, :page_size) || page_size_config.selected_page_size
@@ -538,13 +848,15 @@ defmodule Cinder.LiveComponent do
     |> assign(:page_size_config, updated_page_size_config)
     |> assign(:current_page, assigns[:current_page] || 1)
     |> assign(:loading, false)
+    |> assign(:error, assigns[:error] || false)
     |> assign(:data, assigns[:data] || [])
     |> assign(:sort_by, assigns[:sort_by] || extract_initial_sorts(assigns))
     |> assign(:filters, assigns[:filters] || %{})
     |> assign(:search_term, assigns[:search_term] || "")
     |> assign(:theme, assigns[:theme] || Cinder.Theme.default())
     |> assign(:query_opts, assigns[:query_opts] || [])
-    |> assign(:page, nil)
+    |> assign_new(:action, fn -> nil end)
+    |> assign_new(:page, fn -> nil end)
     |> assign(:user_has_interacted, Map.get(socket.assigns, :user_has_interacted, false))
     # Keyset pagination state
     |> assign(:pagination_mode, pagination_mode)
@@ -552,29 +864,38 @@ defmodule Cinder.LiveComponent do
     |> assign(:before_keyset, assigns[:before_keyset])
     |> assign(:first_keyset, assigns[:first_keyset])
     |> assign(:last_keyset, assigns[:last_keyset])
+    # Selection state
+    |> assign(:selectable, assigns[:selectable] || false)
+    |> assign_new(:selected_ids, fn -> MapSet.new() end)
+    |> assign(:on_selection_change, assigns[:on_selection_change])
+    |> assign(:on_query_change, assigns[:on_query_change])
+    |> assign(:id_field, assigns[:id_field] || :id)
+    |> assign(:sort_mode, assigns[:sort_mode] || :additive)
+    # Bulk actions
+    |> assign_new(:bulk_action_slots, fn -> [] end)
   end
 
   defp assign_column_definitions(socket) do
-    resource = socket.assigns.query
+    # Display columns - already processed by Collection, use directly
+    columns = socket.assigns.col
 
-    columns =
-      socket.assigns.col
-      |> Enum.map(&Cinder.Column.parse_column(&1, resource))
-
-    filter_columns =
-      case Map.get(socket.assigns, :filter_configs) do
+    # Query columns - columns used for filtering and searching
+    # Includes filterable columns, searchable columns, and filter-only slots
+    query_columns =
+      case Map.get(socket.assigns, :query_columns) do
         nil -> columns
-        filter_configs -> filter_configs
+        qc -> qc
       end
 
+    # Field names of filterable columns (for URL state management)
     filter_field_names =
-      filter_columns
+      query_columns
       |> Enum.filter(& &1.filterable)
       |> Enum.map(& &1.field)
 
     socket
     |> assign(:columns, columns)
-    |> assign(:filter_columns, filter_columns)
+    |> assign(:query_columns, query_columns)
     |> assign(:filter_field_names, filter_field_names)
   end
 
@@ -594,18 +915,72 @@ defmodule Cinder.LiveComponent do
         %{field: field_name}
       end)
 
-    case query do
-      nil -> []
-      query -> Cinder.QueryBuilder.extract_query_sorts(query, simple_columns)
-    end
+    query_sorts =
+      case query do
+        nil -> []
+        query -> Cinder.QueryBuilder.extract_query_sorts(query, simple_columns)
+      end
+
+    Cinder.QueryBuilder.default_sorts_from_cycles(columns, query_sorts)
   end
 
   # ============================================================================
   # PRIVATE FUNCTIONS - Data Loading
   # ============================================================================
 
-  defp load_data_if_needed(socket) do
-    load_data(socket)
+  # Keys that affect data queries - changes to these trigger a reload.
+  # Note: actor, tenant, and scope are normalized separately to avoid
+  # false positives from Ecto struct metadata differences.
+  @data_keys ~w(filters sort_by current_page page_size search_term query query_opts after_keyset before_keyset)a
+
+  defp data_state(assigns) do
+    base_state = Map.take(assigns, @data_keys)
+
+    Map.merge(base_state, %{
+      actor_id: normalize_auth(assigns[:actor]),
+      tenant_id: normalize_auth(assigns[:tenant]),
+      scope_id: normalize_scope(assigns[:scope])
+    })
+  end
+
+  defp normalize_auth(nil), do: nil
+  defp normalize_auth(value) when is_binary(value) or is_atom(value), do: value
+  defp normalize_auth(%{id: id}), do: id
+  defp normalize_auth(value), do: value
+
+  # Normalize scope by extracting IDs from nested structs
+  defp normalize_scope(nil), do: nil
+
+  defp normalize_scope(%_{} = scope) do
+    scope
+    |> Map.from_struct()
+    |> normalize_scope()
+  end
+
+  defp normalize_scope(scope) when is_map(scope) do
+    scope
+    |> Enum.map(fn
+      {key, %{id: id}} -> {key, id}
+      {key, value} when is_map(value) -> {key, normalize_scope(value)}
+      {key, value} -> {key, value}
+    end)
+    |> Enum.sort()
+  end
+
+  defp normalize_scope(value), do: value
+
+  defp load_data_if_needed(socket, prev) do
+    first_load = socket.assigns[:page] == nil
+    curr = data_state(socket.assigns)
+    state_changed = curr != prev
+    reload_requested = socket.assigns[:__reload_requested__] == true
+    socket = assign(socket, :__reload_requested__, false)
+
+    if first_load or state_changed or reload_requested do
+      load_data(socket)
+    else
+      socket
+    end
   end
 
   defp load_data(socket) do
@@ -629,19 +1004,22 @@ defmodule Cinder.LiveComponent do
 
     resource_var = resource
 
-    # Use filter_columns for filtering (includes filter-only slots with filter_fn)
-    filter_columns = Map.get(socket.assigns, :filter_columns, columns)
+    # Use query_columns for filtering and searching (includes filter-only slots)
+    query_columns = Map.get(socket.assigns, :query_columns, columns)
+
+    action = Map.get(socket.assigns, :action)
 
     options = [
       actor: actor,
       tenant: tenant,
       scope: scope,
+      action: action,
       query_opts: query_opts,
       filters: filters,
       sort_by: sort_by,
       page_size: page_size,
       current_page: current_page,
-      columns: filter_columns,
+      columns: query_columns,
       search_term: search_term,
       search_fn: socket.assigns.search_fn,
       pagination_configured: socket.assigns.page_size_config.configurable || page_size != 25,
@@ -651,10 +1029,28 @@ defmodule Cinder.LiveComponent do
       before_keyset: before_keyset
     ]
 
+    notify_query? = !!socket.assigns[:on_query_change]
+
     socket
     |> assign(:loading, true)
+    |> assign(:error, false)
     |> start_async(:load_data, fn ->
-      Cinder.QueryBuilder.build_and_execute(resource_var, options)
+      # Build query once, reuse for both notification and execution
+      case Cinder.QueryBuilder.build_query(resource_var, options) do
+        {:ok, prepared_query} ->
+          result =
+            Cinder.QueryBuilder.build_and_execute_from_query(
+              resource_var,
+              prepared_query,
+              options
+            )
+
+          query_for_notification = if notify_query?, do: prepared_query, else: nil
+          {result, query_for_notification}
+
+        {:error, _} = error ->
+          {error, nil}
+      end
     end)
   end
 end

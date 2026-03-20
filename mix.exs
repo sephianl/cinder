@@ -1,7 +1,7 @@
 defmodule Cinder.MixProject do
   use Mix.Project
 
-  @version "0.9.0-beta.2"
+  @version "0.12.1"
   @source_url "https://github.com/sevenseacat/cinder"
 
   def project do
@@ -18,7 +18,9 @@ defmodule Cinder.MixProject do
       description: description(),
       name: "Cinder",
       aliases: aliases(),
-      source_url: @source_url
+      source_url: @source_url,
+      dialyzer: [plt_add_apps: [:mix]],
+      gettext: [write_reference_line_numbers: false]
     ]
   end
 
@@ -56,17 +58,18 @@ defmodule Cinder.MixProject do
       {:phoenix_live_view, "~> 1.0"},
       {:spark, "~> 2.0"},
       {:gettext, "~> 1.0.0"},
-      {:usage_rules, "~> 0.1", only: [:dev]},
+      {:usage_rules, "~> 1.0", only: [:dev]},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
       {:makeup_eex, "~> 2.0", only: :dev},
       {:makeup_html, ">= 0.0.0", only: :dev},
       {:igniter, "~> 0.5", only: [:dev, :test]},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
-      {:mimic, "~> 1.7", only: :test},
+      {:mimic, "~> 2.3", only: :test},
       {:ex_check, "~> 0.16", only: [:dev], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -77,9 +80,9 @@ defmodule Cinder.MixProject do
   defp package do
     [
       name: "cinder",
-      maintainers: ["Rebecca Le"],
+      maintainers: ["Rebecca Le <traybaby@gmail.com>"],
       licenses: ["MIT"],
-      links: %{"GitHub" => @source_url},
+      links: %{"GitHub" => @source_url, "Website" => "https://cinder.sevenseacat.net"},
       files: ~w(lib i18n .formatter.exs mix.exs README.md CHANGELOG.md LICENSE usage-rules.md)
     ]
   end
@@ -91,18 +94,23 @@ defmodule Cinder.MixProject do
       source_url: @source_url,
       extras: [
         "README.md",
-        "docs/examples.md",
+        "docs/getting-started.md",
+        "docs/filters.md",
+        "docs/sorting.md",
+        "docs/advanced.md",
         "docs/theming.md",
         "docs/theme-showcase.md",
         "docs/custom-filters.md",
         "docs/localization.md",
         "docs/upgrading.md",
+        "docs/examples.md",
         "CHANGELOG.md"
       ],
       groups_for_modules: [
         "Core Components": [
           Cinder,
           Cinder.Collection,
+          Cinder.Controls,
           Cinder.LiveComponent
         ],
         "URL State Management": [
@@ -110,7 +118,8 @@ defmodule Cinder.MixProject do
           Cinder.UrlManager
         ],
         Refresh: [
-          Cinder.Refresh
+          Cinder.Refresh,
+          Cinder.Update
         ],
         "Filter Types": [
           Cinder.Filter,
@@ -137,7 +146,9 @@ defmodule Cinder.MixProject do
           Cinder.QueryBuilder,
           Cinder.Column,
           Cinder.FilterManager,
-          Cinder.Filter.Debug
+          Cinder.Filter.Debug,
+          Cinder.PageSize,
+          Cinder.BulkActionExecutor
         ],
         Deprecated: [
           Cinder.Table,

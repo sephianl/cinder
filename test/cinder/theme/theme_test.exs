@@ -25,7 +25,6 @@ defmodule Cinder.ThemeTest do
         :th_class,
         :td_class,
         :sort_indicator_class,
-        :loading_class,
         :empty_class,
         :pagination_wrapper_class,
         :pagination_container_class,
@@ -47,17 +46,16 @@ defmodule Cinder.ThemeTest do
         :filter_inputs_class,
         :filter_input_wrapper_class,
         :filter_label_class,
-        :filter_placeholder_class,
         :filter_text_input_class,
         :filter_date_input_class,
         :filter_number_input_class,
         :filter_select_input_class,
         :filter_clear_button_class,
-        # Boolean filter styling
-        :filter_boolean_container_class,
-        :filter_boolean_option_class,
-        :filter_boolean_radio_class,
-        :filter_boolean_label_class,
+        # Radio group filter styling
+        :filter_radio_group_container_class,
+        :filter_radio_group_option_class,
+        :filter_radio_group_radio_class,
+        :filter_radio_group_label_class,
         # Checkbox filter styling
         :filter_checkbox_container_class,
         :filter_checkbox_input_class,
@@ -244,13 +242,6 @@ defmodule Cinder.ThemeTest do
               assert is_binary(value),
                      "Theme class key #{key} should be a string, got: #{inspect(value)}"
 
-            String.ends_with?(key_str, "_data") ->
-              assert is_map(value),
-                     "Theme data key #{key} should be a map, got: #{inspect(value)}"
-
-              assert Map.has_key?(value, "data-key"),
-                     "Theme data key #{key} should contain 'data-key', got: #{inspect(value)}"
-
             String.ends_with?(key_str, "_name") ->
               assert is_binary(value),
                      "Theme icon name key #{key} should be a string, got: #{inspect(value)}"
@@ -311,12 +302,7 @@ defmodule Cinder.ThemeTest do
         assert Map.has_key?(theme, :table_class)
         assert Map.has_key?(theme, :th_class)
 
-        # Should also have data attributes
-        assert Map.has_key?(theme, :container_data)
-        assert Map.has_key?(theme, :table_data)
-        assert Map.has_key?(theme, :th_data)
-
-        # Class values should be strings, data values should be maps
+        # Class values should be strings
         for {key, value} <- theme do
           key_str = to_string(key)
 
@@ -324,10 +310,6 @@ defmodule Cinder.ThemeTest do
             String.ends_with?(key_str, "_class") ->
               assert is_binary(value),
                      "Theme class key #{key} should be a string, got: #{inspect(value)}"
-
-            String.ends_with?(key_str, "_data") ->
-              assert is_map(value),
-                     "Theme data key #{key} should be a map, got: #{inspect(value)}"
 
             String.ends_with?(key_str, "_name") ->
               assert is_binary(value),

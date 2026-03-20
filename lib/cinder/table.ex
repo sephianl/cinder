@@ -52,12 +52,19 @@ defmodule Cinder.Table do
   attr :url_state, :any, default: false, doc: "URL state object from UrlSync.handle_params"
   attr :query_opts, :list, default: [], doc: "Additional Ash query options"
   attr :on_state_change, :any, default: nil, doc: "Custom state change handler"
+
+  attr :on_query_change, :any,
+    default: nil,
+    doc:
+      "Event name sent to parent when the query changes. " <>
+        "Parent receives {event_name, %{query: Ash.Query.t(), id: string()}}."
   attr :show_pagination, :boolean, default: true, doc: "Whether to show pagination controls"
   attr :show_filters, :boolean, default: nil, doc: "Whether to show filter controls"
   attr :loading_message, :string, default: "Loading...", doc: "Message to show while loading"
-  attr :filters_label, :string, default: "🔍 Filters", doc: "Label for the filters component"
+  attr :filters_label, :string, default: "Filters", doc: "Label for the filters component"
   attr :search, :any, default: nil, doc: "Search configuration"
   attr :empty_message, :string, default: "No results found", doc: "Message when no results"
+  attr :error_message, :string, default: nil, doc: "Message to show on error"
   attr :class, :string, default: "", doc: "Additional CSS classes"
   attr :row_click, :any, default: nil, doc: "Function to call when a row is clicked"
 
@@ -76,6 +83,10 @@ defmodule Cinder.Table do
     attr :filter, :any
     attr :label, :string
   end
+
+  slot :loading, required: false, doc: "Custom loading state content"
+  slot :empty, required: false, doc: "Custom empty state content"
+  slot :error, required: false, doc: "Custom error state content"
 
   @doc """
   Renders a data table.
@@ -113,9 +124,14 @@ defmodule Cinder.Table do
   defdelegate process_filter_slots(filter_slots, resource), to: Cinder.Collection
 
   @doc """
-  Merge column filters and filter-only slots, checking for field conflicts.
-  Delegates to `Cinder.Collection.merge_filter_configurations/2`.
+  Builds the list of columns used for query operations (filtering AND searching).
+  Delegates to `Cinder.Collection.build_query_columns/2`.
   """
+  defdelegate build_query_columns(processed_columns, processed_filter_slots),
+    to: Cinder.Collection
+
+  @doc false
+  @deprecated "Use build_query_columns/2 instead"
   defdelegate merge_filter_configurations(processed_columns, processed_filter_slots),
     to: Cinder.Collection
 

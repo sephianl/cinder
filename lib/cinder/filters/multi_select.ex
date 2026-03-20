@@ -41,16 +41,17 @@ defmodule Cinder.Filters.MultiSelect do
 
   @behaviour Cinder.Filter
   use Phoenix.Component
+  use Cinder.Messages
 
-  require Ash.Query
-  import Cinder.Filter
+  import Cinder.Filter, only: [get_option: 3, field_name: 1, filter_id: 2]
   alias Phoenix.LiveView.JS
 
   @impl true
   def render(column, current_value, theme, assigns) do
     filter_options = Map.get(column, :filter_options, [])
     options = get_option(filter_options, :options, [])
-    prompt = get_option(filter_options, :prompt, "Select options...")
+    default_prompt = dgettext("cinder", "Select options...")
+    prompt = get_option(filter_options, :prompt, default_prompt)
     selected_values = current_value || []
 
     # Create a lookup map for labels
@@ -71,7 +72,18 @@ defmodule Cinder.Filters.MultiSelect do
           )
 
         count ->
-          "#{count} selected"
+          dgettext("cinder", "%{count} selected", count: count)
+      end
+
+    table_id = Map.get(assigns, :table_id)
+    safe_field_name = Cinder.Filter.sanitized_field_name(column.field)
+
+    # Use filter_id for consistent ID generation (or fallback for tests without table_id)
+    dropdown_id =
+      if table_id do
+        filter_id(table_id, column.field)
+      else
+        "multiselect-dropdown-#{safe_field_name}"
       end
 
     assigns = %{
@@ -82,21 +94,22 @@ defmodule Cinder.Filters.MultiSelect do
       display_text: display_text,
       theme: theme,
       field_name: field_name(column.field),
-      dropdown_id: "multiselect-dropdown-#{Cinder.Filter.sanitized_field_name(column.field)}",
+      dropdown_id: dropdown_id,
       target: Map.get(assigns, :target)
     }
 
     ~H"""
-    <div class={@theme.filter_multiselect_container_class} id={@dropdown_id}>
+    <div class={@theme.filter_multiselect_container_class} data-key="filter_multiselect_container_class" id={@dropdown_id}>
       <!-- Main dropdown button that looks like a select input -->
       <button
         type="button"
+        id={"#{@dropdown_id}-button"}
         class={[@theme.filter_select_input_class, "flex items-center justify-between"]}
-        {@theme.filter_select_input_data}
+        data-key="filter_select_input_class"
         phx-click={JS.toggle(to: "##{@dropdown_id}-options")}
       >
         <span class={[if(Enum.empty?(@selected_values), do: @theme.filter_select_placeholder_class, else: ""), "truncate"]}>{@display_text}</span>
-        <svg :if={@theme.filter_select_arrow_class != ""} class={@theme.filter_select_arrow_class} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg :if={@theme.filter_select_arrow_class != ""} class={@theme.filter_select_arrow_class} data-key="filter_select_arrow_class" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
         </svg>
       </button>
@@ -105,23 +118,23 @@ defmodule Cinder.Filters.MultiSelect do
       <div
         id={"#{@dropdown_id}-options"}
         class={[@theme.filter_multiselect_dropdown_class, "hidden"]}
-        {@theme.filter_multiselect_dropdown_data}
+        data-key="filter_multiselect_dropdown_class"
         phx-click-away={JS.hide(to: "##{@dropdown_id}-options")}
       >
-        <label :for={{label, value} <- @options} class={[@theme.filter_multiselect_option_class, "flex items-center"]} {@theme.filter_multiselect_option_data}>
+        <label :for={{label, value} <- @options} class={[@theme.filter_multiselect_option_class, "flex items-center"]} data-key="filter_multiselect_option_class">
           <input
             type="checkbox"
             name={@field_name <> "[]"}
             value={to_string(value)}
             checked={to_string(value) in Enum.map(@selected_values, &to_string/1)}
             class={@theme.filter_multiselect_checkbox_class}
-            {@theme.filter_multiselect_checkbox_data}
+            data-key="filter_multiselect_checkbox_class"
           />
-          <span class={@theme.filter_multiselect_label_class} {@theme.filter_multiselect_label_data}>{label}</span>
+          <span class={@theme.filter_multiselect_label_class} data-key="filter_multiselect_label_class">{label}</span>
         </label>
 
-        <div :if={Enum.empty?(@options)} class={@theme.filter_multiselect_empty_class} {@theme.filter_multiselect_empty_data}>
-          No options available
+        <div :if={Enum.empty?(@options)} class={@theme.filter_multiselect_empty_class} data-key="filter_multiselect_empty_class">
+          {dgettext("cinder", "No options available")}
         </div>
       </div>
     </div>

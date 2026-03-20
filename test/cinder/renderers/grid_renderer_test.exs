@@ -8,34 +8,24 @@ defmodule Cinder.Renderers.GridTest do
   defp build_theme do
     %{
       container_class: "container",
-      container_data: %{"data-key" => "container_class"},
       controls_class: "controls",
-      controls_data: %{"data-key" => "controls_class"},
       empty_class: "empty",
-      empty_data: %{"data-key" => "empty_class"},
       loading_overlay_class: "loading-overlay",
-      loading_overlay_data: %{"data-key" => "loading_overlay_class"},
       loading_container_class: "loading-container",
-      loading_container_data: %{"data-key" => "loading_container_class"},
       loading_spinner_class: "spinner",
-      loading_spinner_data: %{"data-key" => "loading_spinner_class"},
       loading_spinner_circle_class: "spinner-circle",
-      loading_spinner_circle_data: %{"data-key" => "loading_spinner_circle_class"},
       loading_spinner_path_class: "spinner-path",
-      loading_spinner_path_data: %{"data-key" => "loading_spinner_path_class"},
       pagination_wrapper_class: "pagination",
-      pagination_wrapper_data: %{"data-key" => "pagination_wrapper_class"},
       grid_container_class: "grid gap-4",
-      grid_container_data: %{"data-key" => "grid_container_class"},
       grid_item_class: "p-4 bg-white border rounded-lg",
-      grid_item_data: %{"data-key" => "grid_item_class"},
       grid_item_clickable_class: "cursor-pointer hover:shadow-md",
-      grid_item_clickable_data: %{"data-key" => "grid_item_clickable_class"}
+      bulk_actions_container_class: "bulk-actions"
     }
   end
 
   defp base_assigns do
     %{
+      id: "test-grid",
       theme: build_theme(),
       data: [],
       columns: [],
@@ -43,8 +33,10 @@ defmodule Cinder.Renderers.GridTest do
       sort_by: [],
       sort_label: "Sort by:",
       loading: false,
+      error: false,
       loading_message: "Loading...",
       empty_message: "No results found",
+      error_message: "An error occurred while loading data",
       show_filters: false,
       show_sort: false,
       show_pagination: false,
@@ -60,11 +52,25 @@ defmodule Cinder.Renderers.GridTest do
       search_term: "",
       search_enabled: false,
       search_label: "Search",
-      search_placeholder: "Search..."
+      search_placeholder: "Search...",
+      selectable: false,
+      selected_ids: MapSet.new(),
+      bulk_action_slots: [],
+      id_field: :id
     }
   end
 
   describe "data-key attributes" do
+    test "supports toggle filter mode without raising" do
+      assigns =
+        base_assigns()
+        |> Map.put(:show_filters, :toggle)
+
+      html = render_component(&GridRenderer.render/1, assigns)
+
+      assert html =~ ~s(data-key="controls_class")
+    end
+
     test "includes data-key for grid container when using theme classes" do
       assigns = base_assigns()
 
@@ -97,7 +103,7 @@ defmodule Cinder.Renderers.GridTest do
       assert html =~ ~s(data-key="grid_item_clickable_class")
     end
 
-    test "does not include data-key when custom container_class is provided" do
+    test "includes data-key even when custom container_class is provided" do
       assigns =
         base_assigns()
         |> Map.put(:container_class, "my-custom-grid")
@@ -105,7 +111,7 @@ defmodule Cinder.Renderers.GridTest do
       html = render_component(&GridRenderer.render/1, assigns)
 
       assert html =~ "my-custom-grid"
-      refute html =~ ~s(data-key="grid_container_class")
+      assert html =~ ~s(data-key="grid_container_class")
     end
 
     test "includes data-key with responsive grid_columns" do

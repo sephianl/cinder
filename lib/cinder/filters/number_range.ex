@@ -8,47 +8,51 @@ defmodule Cinder.Filters.NumberRange do
   @behaviour Cinder.Filter
   use Phoenix.Component
 
-  require Ash.Query
-  import Cinder.Filter
+  import Cinder.Filter, only: [field_name: 2, filter_id: 3]
   use Cinder.Messages
 
   @impl true
-  def render(column, current_value, theme, _assigns) do
+  def render(column, current_value, theme, assigns) do
     min_value = get_in(current_value, [:min]) || ""
     max_value = get_in(current_value, [:max]) || ""
+    table_id = Map.get(assigns, :table_id)
 
     assigns = %{
       column: column,
       min_value: min_value,
       max_value: max_value,
-      theme: theme
+      theme: theme,
+      min_id: table_id && filter_id(table_id, column.field, "min"),
+      max_id: table_id && filter_id(table_id, column.field, "max")
     }
 
     ~H"""
-    <div class={@theme.filter_range_container_class} {@theme.filter_range_container_data}>
-      <div class={@theme.filter_range_input_group_class} {@theme.filter_range_input_group_data}>
+    <div class={@theme.filter_range_container_class} data-key="filter_range_container_class">
+      <div class={@theme.filter_range_input_group_class} data-key="filter_range_input_group_class">
         <input
           type="number"
+          id={@min_id}
           name={field_name(@column.field, "min")}
           value={@min_value}
-          placeholder="Min"
+          placeholder={dgettext("cinder", "Min")}
           phx-debounce="300"
           class={@theme.filter_number_input_class}
-          {@theme.filter_number_input_data}
+          data-key="filter_number_input_class"
         />
       </div>
-      <div class={@theme.filter_range_separator_class} {@theme.filter_range_separator_data}>
+      <div class={@theme.filter_range_separator_class} data-key="filter_range_separator_class">
         {dgettext("cinder", "to")}
       </div>
-      <div class={@theme.filter_range_input_group_class} {@theme.filter_range_input_group_data}>
+      <div class={@theme.filter_range_input_group_class} data-key="filter_range_input_group_class">
         <input
           type="number"
+          id={@max_id}
           name={field_name(@column.field, "max")}
           value={@max_value}
-          placeholder="Max"
+          placeholder={dgettext("cinder", "Max")}
           phx-debounce="300"
           class={@theme.filter_number_input_class}
-          {@theme.filter_number_input_data}
+          data-key="filter_number_input_class"
         />
       </div>
     </div>

@@ -9,14 +9,14 @@ defmodule Cinder.Filters.DateRange do
   @behaviour Cinder.Filter
   use Phoenix.Component
 
-  require Ash.Query
-  import Cinder.Filter
+  import Cinder.Filter, only: [field_name: 2, filter_id: 3]
   use Cinder.Messages
 
   @impl true
-  def render(column, current_value, theme, _assigns) do
+  def render(column, current_value, theme, assigns) do
     from_value = get_in(current_value, [:from]) || ""
     to_value = get_in(current_value, [:to]) || ""
+    table_id = Map.get(assigns, :table_id)
 
     # Check for include_time option
     filter_options = Map.get(column, :filter_options, [])
@@ -32,32 +32,36 @@ defmodule Cinder.Filters.DateRange do
       from_value: from_display,
       to_value: to_display,
       input_type: input_type,
-      theme: theme
+      theme: theme,
+      from_id: table_id && filter_id(table_id, column.field, "from"),
+      to_id: table_id && filter_id(table_id, column.field, "to")
     }
 
     ~H"""
-    <div class={@theme.filter_range_container_class} {@theme.filter_range_container_data}>
-      <div class={@theme.filter_range_input_group_class} {@theme.filter_range_input_group_data}>
+    <div class={@theme.filter_range_container_class} data-key="filter_range_container_class">
+      <div class={@theme.filter_range_input_group_class} data-key="filter_range_input_group_class">
         <input
           type={@input_type}
+          id={@from_id}
           name={field_name(@column.field, "from")}
           value={@from_value}
-          placeholder="From"
+          placeholder={dgettext("cinder", "From")}
           class={@theme.filter_date_input_class}
-          {@theme.filter_date_input_data}
+          data-key="filter_date_input_class"
         />
       </div>
-      <div class={@theme.filter_range_separator_class} {@theme.filter_range_separator_data}>
+      <div class={@theme.filter_range_separator_class} data-key="filter_range_separator_class">
         {dgettext("cinder", "to")}
       </div>
-      <div class={@theme.filter_range_input_group_class} {@theme.filter_range_input_group_data}>
+      <div class={@theme.filter_range_input_group_class} data-key="filter_range_input_group_class">
         <input
           type={@input_type}
+          id={@to_id}
           name={field_name(@column.field, "to")}
           value={@to_value}
-          placeholder="To"
+          placeholder={dgettext("cinder", "To")}
           class={@theme.filter_date_input_class}
-          {@theme.filter_date_input_data}
+          data-key="filter_date_input_class"
         />
       </div>
     </div>
@@ -151,7 +155,6 @@ defmodule Cinder.Filters.DateRange do
   # Private helper functions
 
   defp valid_date?(""), do: true
-  defp valid_date?(nil), do: true
 
   defp valid_date?(date_string) when is_binary(date_string) do
     case Date.from_iso8601(date_string) do
@@ -159,8 +162,6 @@ defmodule Cinder.Filters.DateRange do
       {:error, _} -> false
     end
   end
-
-  defp valid_date?(_), do: false
 
   # Validate both date and datetime formats
   defp valid_date_or_datetime?(""), do: true
@@ -185,8 +186,6 @@ defmodule Cinder.Filters.DateRange do
       valid_date?(value)
     end
   end
-
-  defp valid_date_or_datetime?(_), do: false
 
   # Format value for HTML input display
   defp format_value_for_input("", _include_time), do: ""
