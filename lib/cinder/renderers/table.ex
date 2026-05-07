@@ -12,6 +12,7 @@ defmodule Cinder.Renderers.Table do
   import Cinder.Renderers.Helpers
 
   alias Cinder.Renderers.BulkActions
+  alias Cinder.Renderers.ColumnPrefs
   alias Cinder.Renderers.Pagination
   alias Cinder.Renderers.SortIcon
   alias Cinder.Selection
@@ -41,6 +42,17 @@ defmodule Cinder.Renderers.Table do
         />
       </div>
 
+      <!-- Column preferences (Edit columns) -->
+      <ColumnPrefs.render
+        id={@id}
+        myself={@myself}
+        theme={@theme}
+        enabled={Map.get(assigns, :column_preferences?, false)}
+        open?={Map.get(assigns, :column_prefs_drawer_open?, false)}
+        drawer_columns={Map.get(assigns, :prefs_drawer_columns, Map.get(assigns, :declared_columns, @columns))}
+        prefs={Map.get(assigns, :column_preferences, Cinder.ColumnPreferences.empty())}
+      />
+
       <!-- Bulk Actions -->
       <BulkActions.render
         selectable={@selectable}
@@ -51,7 +63,10 @@ defmodule Cinder.Renderers.Table do
       />
 
       <!-- Main table -->
-      <div class={@theme.table_wrapper_class} data-key="table_wrapper_class">
+      <div class={[
+             @theme.table_wrapper_class,
+             prefs_hydration_class(assigns)
+           ]} data-key="table_wrapper_class">
         <table class={@theme.table_class} data-key="table_class">
           <thead class={@theme.thead_class} data-key="thead_class">
             <tr class={@theme.header_row_class} data-key="header_row_class">
@@ -179,6 +194,11 @@ defmodule Cinder.Renderers.Table do
   end
 
   defp all_page_selected?(_selected_ids, _data, _id_field, _selectable), do: false
+
+  defp prefs_hydration_class(%{column_preferences?: true, column_prefs_hydrated?: false}),
+    do: "invisible"
+
+  defp prefs_hydration_class(_assigns), do: ""
 
   defp column_count(columns, selectable) do
     base_count = length(columns)
