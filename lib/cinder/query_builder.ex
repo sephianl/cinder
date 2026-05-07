@@ -197,6 +197,7 @@ defmodule Cinder.QueryBuilder do
         Keyword.get(options, :tenant),
         Keyword.get(options, :scope)
       )
+
     raw_page_size = Keyword.get(options, :page_size, 25)
     # Strip negative page sizes - use default instead
     page_size = if raw_page_size > 0, do: raw_page_size, else: 25
