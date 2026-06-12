@@ -82,7 +82,7 @@ defmodule Cinder.Renderers.Table do
               </th>
               <th :for={column <- @columns} class={[@theme.th_class, column.class]} data-key="th_class">
                 <div :if={column.sortable}
-                     class={["cursor-pointer select-none", (@show_loading_state && "opacity-75" || "")]}
+                     class={["cursor-pointer select-none", (@show_loading_state && @theme.loading_row_class || "")]}
                      phx-click="toggle_sort"
                      phx-value-key={column.field}
                      phx-target={@myself}>
@@ -97,7 +97,7 @@ defmodule Cinder.Renderers.Table do
               </th>
             </tr>
           </thead>
-          <tbody class={[@theme.tbody_class, (@show_loading_state && "opacity-75" || "")]} data-key="tbody_class">
+          <tbody class={[@theme.tbody_class, (@show_loading_state && @theme.loading_row_class || "")]} data-key="tbody_class">
             <tr :for={item <- @data} :if={not @error}
                 class={selection_classes(@theme.row_class, Map.get(assigns, :item_class), @row_click, @selectable, @selected_ids, item, @id_field, Map.get(@theme, :selected_row_class))}
                 data-item-id={to_string(Map.get(item, @id_field))}
