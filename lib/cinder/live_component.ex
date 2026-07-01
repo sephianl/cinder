@@ -96,6 +96,36 @@ defmodule Cinder.LiveComponent do
     do_update_items_if_visible(socket, nil, ids, update_fn, id_field)
   end
 
+  def update(%{__upsert_items__: {items, update_fn}}, socket) do
+    id_field = socket.assigns[:id_field] || :id
+    data = socket.assigns.data || []
+    visible_ids = data |> Enum.map(&Map.get(&1, id_field)) |> MapSet.new()
+    items_by_id = Map.new(items, &{Map.get(&1, id_field), &1})
+
+    updated_existing =
+      Enum.map(data, fn item ->
+        case Map.get(items_by_id, Map.get(item, id_field)) do
+          nil -> item
+          new_item -> update_fn.(new_item)
+        end
+      end)
+
+    new_items =
+      items
+      |> Enum.reject(&MapSet.member?(visible_ids, Map.get(&1, id_field)))
+      |> Enum.map(update_fn)
+
+    {:ok, assign(socket, :data, updated_existing ++ new_items)}
+  end
+
+  def update(%{__remove_items__: ids}, socket) do
+    id_field = socket.assigns[:id_field] || :id
+    remove_set = MapSet.new(ids)
+    data = socket.assigns.data || []
+    remaining = Enum.reject(data, &MapSet.member?(remove_set, Map.get(&1, id_field)))
+    {:ok, assign(socket, :data, remaining)}
+  end
+
   def update(%{__force_hydrate__: true}, socket) do
     {:ok, force_hydrate_column_prefs(socket)}
   end
@@ -176,9 +206,15 @@ defmodule Cinder.LiveComponent do
 
   @impl true
   def render(assigns) do
-    # Delegate rendering to the renderer module
+    assigns = merge_overlay_items(assigns)
     assigns.renderer.render(assigns)
   end
+
+  defp merge_overlay_items(%{overlay_items: items} = assigns) when is_list(items) and items != [] do
+    Phoenix.Component.assign(assigns, :data, items ++ (assigns[:data] || []))
+  end
+
+  defp merge_overlay_items(assigns), do: assigns
 
   # ============================================================================
   # EVENT HANDLERS

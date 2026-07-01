@@ -232,4 +232,80 @@ defmodule Cinder.Update do
 
     socket
   end
+
+  @doc """
+  Upserts items into a collection: rows already present (matched by the id field)
+  are replaced in place, rows not yet present are appended.
+
+  Unlike `update_items_if_visible/4`, this DOES add rows that are not currently
+  visible. It is the in-place equivalent of a refresh for newly-created records:
+  the caller loads the row exactly as the table needs it (same loads as the
+  collection query) and hands it over, avoiding a full re-query.
+
+  `update_fn` is applied to every provided item (both the updated and the newly
+  inserted ones) before it lands in the data list. Pass the identity when the
+  items are already render-ready.
+
+  Inserted rows are appended in the order given; call `Cinder.Refresh.refresh_table/2`
+  when you need authoritative sort/pagination.
+
+  Also accepts a single struct for convenience.
+
+  ## Examples
+
+      # A newly-created record streamed in via PubSub, loaded as the table needs it
+      def handle_info(%{topic: "route:created:" <> _, payload: %{data: data}}, socket) do
+        {:ok, routes} = Ash.load(List.wrap(data), @route_loads, lazy?: true)
+        {:noreply, Cinder.upsert_items(socket, "routes-table", routes)}
+      end
+  """
+  def upsert_items(socket, collection_id, item, update_fn \\ &Function.identity/1)
+
+  def upsert_items(socket, collection_id, item, update_fn)
+      when is_binary(collection_id) and is_struct(item) and is_function(update_fn, 1) do
+    upsert_items(socket, collection_id, [item], update_fn)
+  end
+
+  def upsert_items(socket, collection_id, items, update_fn)
+      when is_binary(collection_id) and is_list(items) and is_function(update_fn, 1) do
+    send_update(Cinder.LiveComponent,
+      id: collection_id,
+      __upsert_items__: {items, update_fn}
+    )
+
+    socket
+  end
+
+  @doc """
+  Removes rows from a collection by their IDs.
+
+  Filters the matching rows out of the collection's in-memory data without
+  triggering a database re-query. This is the in-place counterpart to
+  `upsert_items/4` for rows that were injected client-side (e.g. transient
+  ghost/preview rows) and need to disappear without a full `refresh_table/2`
+  round-trip — which would re-query asynchronously and race any subsequent
+  in-memory writes.
+
+  IDs not currently present are silently ignored.
+
+  Also accepts a single ID for convenience.
+
+  ## Examples
+
+      # Drop transient preview rows that no longer apply
+      Cinder.remove_items(socket, "routes-table", stale_candidate_ids)
+  """
+  def remove_items(socket, collection_id, ids)
+      when is_binary(collection_id) and is_list(ids) do
+    send_update(Cinder.LiveComponent,
+      id: collection_id,
+      __remove_items__: ids
+    )
+
+    socket
+  end
+
+  def remove_items(socket, collection_id, id) when is_binary(collection_id) do
+    remove_items(socket, collection_id, [id])
+  end
 end

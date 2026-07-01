@@ -553,4 +553,84 @@ defmodule Cinder.Integration.UpdateItemTest do
       assert item.c == 3
     end
   end
+
+  describe "LiveComponent update/2 with __upsert_items__" do
+    test "updates existing rows in place and appends new ones" do
+      socket =
+        make_socket(%{
+          id_field: :id,
+          data: [
+            %{id: "route-1", name: "A", status: :old},
+            %{id: "route-2", name: "B", status: :old}
+          ]
+        })
+
+      assigns = %{
+        __upsert_items__:
+          {[
+             %{id: "route-2", name: "B", status: :new},
+             %{id: "route-3", name: "C", status: :new}
+           ], &Function.identity/1}
+      }
+
+      {:ok, updated_socket} = LiveComponent.update(assigns, socket)
+
+      assert updated_socket.assigns.data == [
+               %{id: "route-1", name: "A", status: :old},
+               %{id: "route-2", name: "B", status: :new},
+               %{id: "route-3", name: "C", status: :new}
+             ]
+    end
+
+    test "appends into an empty collection" do
+      socket = make_socket(%{id_field: :id, data: []})
+
+      assigns = %{
+        __upsert_items__: {[%{id: "route-1", name: "A"}], &Function.identity/1}
+      }
+
+      {:ok, updated_socket} = LiveComponent.update(assigns, socket)
+
+      assert updated_socket.assigns.data == [%{id: "route-1", name: "A"}]
+    end
+
+    test "applies update_fn to both updated and inserted rows" do
+      socket =
+        make_socket(%{
+          id_field: :id,
+          data: [%{id: "route-1", n: 1}]
+        })
+
+      assigns = %{
+        __upsert_items__:
+          {[%{id: "route-1", n: 1}, %{id: "route-2", n: 2}], fn item -> %{item | n: item.n * 10} end}
+      }
+
+      {:ok, updated_socket} = LiveComponent.update(assigns, socket)
+
+      assert updated_socket.assigns.data == [
+               %{id: "route-1", n: 10},
+               %{id: "route-2", n: 20}
+             ]
+    end
+
+    test "respects a custom id_field" do
+      socket =
+        make_socket(%{
+          id_field: :uuid,
+          data: [%{uuid: "u-1", name: "A"}]
+        })
+
+      assigns = %{
+        __upsert_items__: {[%{uuid: "u-2", name: "B"}], &Function.identity/1}
+      }
+
+      {:ok, updated_socket} = LiveComponent.update(assigns, socket)
+
+      assert updated_socket.assigns.data == [
+               %{uuid: "u-1", name: "A"},
+               %{uuid: "u-2", name: "B"}
+             ]
+    end
+  end
 end

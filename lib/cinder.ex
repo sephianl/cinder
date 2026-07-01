@@ -151,6 +151,9 @@ defmodule Cinder do
   defdelegate update_items(socket, collection_id, ids, update_fn), to: Cinder.Update
   defdelegate update_if_visible(socket, collection_id, id, update_fn), to: Cinder.Update
   defdelegate update_items_if_visible(socket, collection_id, ids, update_fn), to: Cinder.Update
+  defdelegate upsert_items(socket, collection_id, items, update_fn), to: Cinder.Update
+  defdelegate upsert_items(socket, collection_id, items), to: Cinder.Update
+  defdelegate remove_items(socket, collection_id, ids), to: Cinder.Update
 
   @doc """
   Sets up Cinder with configured custom filters.

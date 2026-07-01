@@ -578,6 +578,7 @@ defmodule Cinder.Collection do
         on_columns_change={@on_columns_change}
         bulk_action_slots={@bulk_action_slots}
         sort_mode={@sort_mode}
+        overlay_items={Map.get(assigns, :overlay_items, [])}
       />
     </div>
     """
