@@ -133,7 +133,8 @@ defmodule Cinder.Controls do
       filter_values: filter_values,
       raw_filter_params: raw_filter_params,
       total_count: Map.get(assigns, :total_count),
-      count_failed?: Map.get(assigns, :count_failed?, false)
+      count_failed?: Map.get(assigns, :count_failed?, false),
+      all_page_selected?: Map.get(assigns, :all_page_selected?, false)
     }
   end
 
