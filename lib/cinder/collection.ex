@@ -239,6 +239,12 @@ defmodule Cinder.Collection do
     doc: "Enable row/item selection via checkboxes"
   )
 
+  attr(:select_on_row_click, :boolean,
+    default: true,
+    doc:
+      "When selectable and no click handler is set, whether clicking anywhere on the row/item toggles selection. Set false to restrict selection to the checkbox only."
+  )
+
   attr(:on_selection_change, :any,
     default: nil,
     doc:
@@ -570,6 +576,7 @@ defmodule Cinder.Collection do
         pagination_mode={@pagination_mode}
         id_field={@id_field}
         selectable={@selectable}
+        select_on_row_click={@select_on_row_click}
         on_selection_change={@on_selection_change}
         on_query_change={@on_query_change}
         column_preferences?={@column_preferences?}

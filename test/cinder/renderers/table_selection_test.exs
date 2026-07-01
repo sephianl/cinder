@@ -231,5 +231,43 @@ defmodule Cinder.Renderers.TableSelectionTest do
       assert html =~ ~r/<input[^>]*checked[^>]*phx-value-id="user-1"/
       refute html =~ ~r/<input[^>]*checked[^>]*phx-value-id="user-2"/
     end
+
+    test "clicking row does not toggle selection when select_on_row_click=false" do
+      assigns =
+        base_assigns()
+        |> Map.merge(%{
+          selectable: true,
+          select_on_row_click: false,
+          selected_ids: MapSet.new(),
+          id_field: :id,
+          row_click: nil,
+          data: [%{id: "user-1", name: "Alice"}]
+        })
+
+      html = render_component(&TableRenderer.render/1, assigns)
+
+      # The row is no longer clickable and carries no row-level push...
+      refute html =~ "cursor-pointer"
+      refute html =~ "push"
+      # ...but the checkbox itself still toggles selection.
+      assert html =~ ~s(phx-click="toggle_select")
+      assert html =~ "test-checkbox-class"
+    end
+
+    test "select_on_row_click=false still highlights selected rows" do
+      assigns =
+        base_assigns()
+        |> Map.merge(%{
+          selectable: true,
+          select_on_row_click: false,
+          selected_ids: MapSet.new(["user-1"]),
+          id_field: :id,
+          data: [%{id: "user-1", name: "Alice"}]
+        })
+
+      html = render_component(&TableRenderer.render/1, assigns)
+
+      assert html =~ "test-selected-row"
+    end
   end
 end

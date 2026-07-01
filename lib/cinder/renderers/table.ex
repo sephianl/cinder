@@ -96,10 +96,10 @@ defmodule Cinder.Renderers.Table do
           </thead>
           <tbody class={[@theme.tbody_class, (@loading && @theme.loading_row_class || "")]} data-key="tbody_class">
             <tr :for={item <- @data} :if={not @error}
-                class={get_row_classes(@theme.row_class, @row_click, @selectable, @selected_ids, item, @id_field, @theme)}
+                class={get_row_classes(@theme.row_class, @row_click, @selectable, Map.get(assigns, :select_on_row_click, true), @selected_ids, item, @id_field, @theme)}
                 data-item-id={to_string(Map.get(item, @id_field))}
                 data-key="row_class"
-                phx-click={row_click_action(@row_click, @selectable, item, @id_field, @myself)}>
+                phx-click={row_click_action(@row_click, @selectable and Map.get(assigns, :select_on_row_click, true), item, @id_field, @myself)}>
               <td :if={@selectable} class={[@theme.td_class, "w-10"]} data-key="td_class">
                 <input
                   type="checkbox"
@@ -240,9 +240,9 @@ defmodule Cinder.Renderers.Table do
   # HELPER FUNCTIONS
   # ============================================================================
 
-  defp get_row_classes(base_classes, row_click, selectable, selected_ids, item, id_field, theme) do
-    # Add cursor-pointer if row is clickable (either via row_click or selectable without row_click)
-    clickable = row_click != nil or (selectable and row_click == nil)
+  defp get_row_classes(base_classes, row_click, selectable, select_on_row_click, selected_ids, item, id_field, theme) do
+    # Add cursor-pointer if row is clickable (either via row_click or selectable row-click without row_click)
+    clickable = row_click != nil or (selectable and select_on_row_click and row_click == nil)
     classes = if clickable, do: [base_classes, "cursor-pointer"], else: [base_classes]
 
     if selectable and item_selected?(selected_ids, item, id_field) do

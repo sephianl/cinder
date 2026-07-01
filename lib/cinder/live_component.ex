@@ -926,6 +926,7 @@ defmodule Cinder.LiveComponent do
     |> assign(:last_keyset, assigns[:last_keyset])
     # Selection state
     |> assign(:selectable, assigns[:selectable] || false)
+    |> assign(:select_on_row_click, Map.get(assigns, :select_on_row_click, true))
     |> assign_new(:selected_ids, fn -> MapSet.new() end)
     |> assign(:on_selection_change, assigns[:on_selection_change])
     |> assign(:on_query_change, assigns[:on_query_change])
