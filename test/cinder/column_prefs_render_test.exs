@@ -154,7 +154,7 @@ defmodule Cinder.ColumnPrefsRenderTest do
 
       refute without_button =~ ~s(data-key="column_prefs_button_class")
       assert with_button =~ ~s(data-key="column_prefs_button_class")
-      assert with_button =~ "Columns"
+      assert with_button =~ ~r/<button[^>]*data-key="column_prefs_button_class"[^>]*>[\s\S]*?<svg/
     end
   end
 

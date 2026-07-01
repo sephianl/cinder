@@ -75,7 +75,8 @@ defmodule Cinder.Renderers.TableSelectionTest do
       assert html =~ ~s(phx-click="toggle_column_prefs_drawer")
       assert html =~ ~s(data-key="column_prefs_header_trigger_class")
       assert html =~ ~s(viewBox="0 0 8 7")
-      assert html =~ "Columns"
+      assert html =~
+         ~r/<button[^>]*data-key="column_prefs_header_trigger_class"[^>]*>[\s\S]*?<svg[^>]*viewBox="0 0 8 7"/
     end
 
     test "columns_trigger slot replaces the default trigger button" do

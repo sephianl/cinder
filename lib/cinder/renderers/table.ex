@@ -195,7 +195,6 @@ defmodule Cinder.Renderers.Table do
         aria-haspopup="dialog"
       >
         <.columns_icon class={@theme.column_prefs_button_icon_class} />
-        <span>{dgettext("cinder", "Columns")}</span>
       </button>
     </div>
     """

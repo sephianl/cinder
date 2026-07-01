@@ -59,10 +59,8 @@ defmodule Cinder.Renderers.ColumnPrefs do
         data-key="column_prefs_button_class"
         aria-haspopup="dialog"
         aria-expanded={to_string(@open?)}
-        title={dgettext("cinder", "Columns")}
       >
         <.columns_icon class={@theme.column_prefs_button_icon_class} />
-        <span>{dgettext("cinder", "Columns")}</span>
       </button>
 
       <div
