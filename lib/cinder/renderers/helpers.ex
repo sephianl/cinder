@@ -34,6 +34,14 @@ defmodule Cinder.Renderers.Helpers do
   end
 
   @doc """
+  The `selectable` a row/item's own click and cursor should use: the collection's
+  `selectable`, or `false` when `select_on_row_click` restricts selection to the
+  checkbox.
+  """
+  def row_selection(selectable, true = _select_on_row_click), do: selectable
+  def row_selection(_selectable, false = _select_on_row_click), do: false
+
+  @doc """
   Builds the `phx-click` action for a selectable row/item.
 
   Returns the caller's click handler when one is given; otherwise pushes a

@@ -97,10 +97,10 @@ defmodule Cinder.Renderers.Table do
           </thead>
           <tbody class={[@theme.tbody_class, (@show_loading_state && @theme.loading_row_class || "")]} data-key="tbody_class">
             <tr :for={item <- @data} :if={not @error}
-                class={selection_classes(@theme.row_class, Map.get(assigns, :item_class), @row_click, @selectable, @selected_ids, item, @id_field, Map.get(@theme, :selected_row_class))}
+                class={selection_classes(@theme.row_class, Map.get(assigns, :item_class), @row_click, row_selection(@selectable, Map.get(assigns, :select_on_row_click, true)), @selected_ids, item, @id_field, Map.get(@theme, :selected_row_class))}
                 data-item-id={to_string(Map.get(item, @id_field))}
                 data-key="row_class"
-                phx-click={selection_click_action(@row_click, @selectable, @selected_ids, item, @id_field, @myself)}>
+                phx-click={selection_click_action(@row_click, row_selection(@selectable, Map.get(assigns, :select_on_row_click, true)), @selected_ids, item, @id_field, @myself)}>
               <td :if={Selection.enabled?(@selectable)} class={[@theme.td_class, "w-10"]} data-key="td_class">
                 <input
                   type="checkbox"
