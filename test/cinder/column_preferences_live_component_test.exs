@@ -120,6 +120,18 @@ defmodule Cinder.ColumnPreferencesLiveComponentTest do
       assert hd(eta_entries).class == ""
     end
 
+    test "display-hidden (filter-only) columns are excluded from the drawer" do
+      cols = [col("name"), col("depot_id", class: "hidden"), col("email")]
+      socket = make_socket(columns: cols)
+
+      {:noreply, socket} =
+        LiveComponent.handle_event("toggle_column_visibility", %{"field" => "name"}, socket)
+
+      drawer_fields = Enum.map(socket.assigns.prefs_drawer_columns, & &1.field)
+      refute "depot_id" in drawer_fields
+      assert Enum.sort(drawer_fields) == ["email", "name"]
+    end
+
     test "fieldless action columns are excluded from the drawer" do
       action = col(nil, hideable: false, reorderable: false)
       cols = [col("a"), col("b"), action]

@@ -314,5 +314,25 @@ defmodule Cinder.ColumnPrefsRenderTest do
       refute html =~ ~r/<th[^>]*>[\s\S]*?Archived At[\s\S]*?<\/th>/
       assert html =~ ~r/<li[^>]*data-field="archived_at"/
     end
+
+    test "filter/search-only (class=hidden) columns never appear in the prefs drawer" do
+      assigns = %{
+        resource: TestUser,
+        actor: nil,
+        id: "users-table",
+        column_preferences?: true,
+        col: [
+          %{field: "name", label: "Name", __slot__: :col},
+          %{field: "email", label: "Depot", class: "hidden", __slot__: :col},
+          %{field: "archived_at", class: "hidden", __slot__: :col}
+        ]
+      }
+
+      html = render_component(&Cinder.Collection.collection/1, assigns)
+
+      assert html =~ ~r/<li[^>]*data-field="name"/
+      refute html =~ ~r/<li[^>]*data-field="email"/
+      refute html =~ ~r/<li[^>]*data-field="archived_at"/
+    end
   end
 end

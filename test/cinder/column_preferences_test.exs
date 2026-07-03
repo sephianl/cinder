@@ -9,8 +9,25 @@ defmodule Cinder.ColumnPreferencesTest do
       label: field,
       hideable: Keyword.get(opts, :hideable, true),
       reorderable: Keyword.get(opts, :reorderable, true),
-      default_visible: Keyword.get(opts, :default_visible, true)
+      default_visible: Keyword.get(opts, :default_visible, true),
+      class: Keyword.get(opts, :class, "")
     }
+  end
+
+  describe "display_hidden?/1" do
+    test "true when the class contains the standalone hidden token" do
+      assert ColumnPreferences.display_hidden?(col("depot_id", class: "hidden"))
+      assert ColumnPreferences.display_hidden?(col("depot_id", class: "hidden md:table-cell"))
+    end
+
+    test "false when there is no hidden class" do
+      refute ColumnPreferences.display_hidden?(col("name"))
+      refute ColumnPreferences.display_hidden?(col("name", class: "min-w-56"))
+    end
+
+    test "does not match hidden as a substring of another token" do
+      refute ColumnPreferences.display_hidden?(col("name", class: "overflow-hidden"))
+    end
   end
 
   describe "from_columns/1" do
@@ -96,6 +113,21 @@ defmodule Cinder.ColumnPreferencesTest do
       result = ColumnPreferences.apply(cols, prefs)
       assert Enum.map(result, & &1.field) == ["b", "a"]
     end
+
+    test "display-hidden (filter-only) columns hold their declared position like pinned ones" do
+      cols = [col("depot_id", class: "hidden"), col("a"), col("b")]
+      prefs = %{order: ["b", "a"], hidden: MapSet.new()}
+      result = ColumnPreferences.apply(cols, prefs)
+      assert Enum.map(result, & &1.field) == ["depot_id", "b", "a"]
+    end
+
+    test "hiding a visible column keeps its filter-only field sibling for search" do
+      cols = [col("barcode"), col("barcode", class: "hidden"), col("name")]
+      prefs = %{order: nil, hidden: MapSet.new(["barcode"])}
+      result = ColumnPreferences.apply(cols, prefs)
+      assert Enum.map(result, & &1.field) == ["barcode", "name"]
+      assert [%{class: "hidden"}, _] = result
+    end
   end
 
   describe "toggle_hidden/3" do
@@ -125,6 +157,12 @@ defmodule Cinder.ColumnPreferencesTest do
       prefs = ColumnPreferences.empty()
       assert ColumnPreferences.toggle_hidden(prefs, "phantom", cols) == prefs
     end
+
+    test "refuses to hide a display-hidden (filter-only) column" do
+      cols = [col("depot_id", class: "hidden"), col("b")]
+      prefs = ColumnPreferences.empty()
+      assert ColumnPreferences.toggle_hidden(prefs, "depot_id", cols) == prefs
+    end
   end
 
   describe "set_order/3" do
@@ -143,6 +181,12 @@ defmodule Cinder.ColumnPreferencesTest do
     test "drops pinned fields from order" do
       cols = [col("a"), col("b", reorderable: false), col("c")]
       prefs = ColumnPreferences.set_order(ColumnPreferences.empty(), ["c", "b", "a"], cols)
+      assert prefs.order == ["c", "a"]
+    end
+
+    test "drops display-hidden (filter-only) fields from order" do
+      cols = [col("a"), col("depot_id", class: "hidden"), col("c")]
+      prefs = ColumnPreferences.set_order(ColumnPreferences.empty(), ["c", "depot_id", "a"], cols)
       assert prefs.order == ["c", "a"]
     end
 

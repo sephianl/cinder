@@ -1024,22 +1024,20 @@ defmodule Cinder.LiveComponent do
 
   defp drawer_columns(declared, visible, true, prefs) do
     (visible ++ Enum.filter(declared, &MapSet.member?(prefs.hidden, &1.field)))
-    |> Enum.reject(&is_nil(&1.field))
+    |> Enum.reject(fn col ->
+      is_nil(col.field) or Cinder.ColumnPreferences.display_hidden?(col)
+    end)
     |> dedupe_by_field()
   end
 
-  # Preferences key on field, so a field maps to one drawer entry even when
-  # several columns share it (e.g. a visible column plus a hidden filter-only
-  # column). Keep declared order; prefer a column that isn't CSS-hidden so the
-  # entry shows the meaningful label.
+  # Preferences key on field, so a field maps to one drawer entry. Display-hidden
+  # filter-only columns are already removed above, so this only collapses the
+  # rare case of two visible columns declared with the same field; keep the first.
   defp dedupe_by_field(columns) do
     columns
     |> Enum.map(& &1.field)
     |> Enum.uniq()
-    |> Enum.map(fn field ->
-      same_field = Enum.filter(columns, &(&1.field == field))
-      Enum.find(same_field, hd(same_field), &(not String.contains?(&1.class || "", "hidden")))
-    end)
+    |> Enum.map(fn field -> Enum.find(columns, &(&1.field == field)) end)
   end
 
   # Columns used for filtering and searching. Cinder.Collection populates this
