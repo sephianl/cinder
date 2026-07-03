@@ -6,6 +6,13 @@ defmodule Cinder.ColumnPreferences do
   lists reorderable columns in the user's preferred sequence; pinned columns
   (declared with `reorderable: false`) keep their original declared position.
   Hidden columns are removed from the rendered list entirely.
+
+  Columns whose class list contains the bare `hidden` token exist only to host
+  a filter or search on a field with no visible body cell (e.g. `class="hidden"`,
+  and also responsive forms like `class="hidden md:table-cell"`). These
+  filter-only columns never participate in the preferences UI: the user can
+  neither show, hide, nor reorder them, and they keep their position among the
+  visible columns like a pinned column.
   """
 
   @type field :: String.t()
@@ -14,6 +21,27 @@ defmodule Cinder.ColumnPreferences do
   @doc "Empty/default preferences — no hidden columns, no custom order."
   @spec empty() :: t()
   def empty, do: %{order: nil, hidden: MapSet.new()}
+
+  @doc """
+  Whether a column is display-hidden — its class list contains the bare `hidden`
+  token (e.g. `"hidden"` or `"hidden md:table-cell"`).
+
+  Such columns are filter/search-only: they host a filter or search on a field
+  but render no visible body cell. They are excluded from the column-preferences
+  editor entirely and pinned at their position among the visible columns.
+  """
+  @spec display_hidden?(map()) :: boolean()
+  def display_hidden?(col) do
+    col
+    |> Map.get(:class)
+    |> to_string()
+    |> String.split()
+    |> Enum.member?("hidden")
+  end
+
+  defp pinned?(col), do: not Map.get(col, :reorderable, true) or display_hidden?(col)
+
+  defp hideable?(col), do: Map.get(col, :hideable, true) and not display_hidden?(col)
 
   @doc """
   Builds initial preferences from the declared columns.
@@ -26,7 +54,7 @@ defmodule Cinder.ColumnPreferences do
     hidden =
       columns
       |> Enum.filter(fn col ->
-        Map.get(col, :hideable, true) && Map.get(col, :default_visible, true) == false
+        hideable?(col) && Map.get(col, :default_visible, true) == false
       end)
       |> Enum.map(& &1.field)
       |> MapSet.new()
@@ -40,15 +68,18 @@ defmodule Cinder.ColumnPreferences do
   """
   @spec apply([map()], t()) :: [map()]
   def apply(columns, %{hidden: hidden, order: order_opt}) do
-    visible = Enum.reject(columns, &MapSet.member?(hidden, &1.field))
+    visible =
+      Enum.reject(columns, fn col ->
+        MapSet.member?(hidden, col.field) and not display_hidden?(col)
+      end)
 
     pinned_with_idx =
       visible
       |> Enum.with_index()
-      |> Enum.filter(fn {col, _idx} -> not Map.get(col, :reorderable, true) end)
+      |> Enum.filter(fn {col, _idx} -> pinned?(col) end)
       |> Enum.sort_by(fn {_col, idx} -> idx end)
 
-    reorderable = Enum.filter(visible, &Map.get(&1, :reorderable, true))
+    reorderable = Enum.reject(visible, &pinned?/1)
 
     ordered_reorderable = order_reorderable(reorderable, order_opt)
 
@@ -73,7 +104,7 @@ defmodule Cinder.ColumnPreferences do
   defp do_toggle_hidden(nil, prefs, _field), do: prefs
 
   defp do_toggle_hidden(col, prefs, field) do
-    if Map.get(col, :hideable, true) do
+    if hideable?(col) do
       %{prefs | hidden: toggle_member(prefs.hidden, field)}
     else
       prefs
@@ -96,7 +127,7 @@ defmodule Cinder.ColumnPreferences do
   def set_order(prefs, new_order, columns) when is_list(new_order) do
     valid_fields =
       columns
-      |> Enum.filter(&Map.get(&1, :reorderable, true))
+      |> Enum.reject(&pinned?/1)
       |> Enum.map(& &1.field)
       |> MapSet.new()
 
@@ -133,7 +164,7 @@ defmodule Cinder.ColumnPreferences do
 
     hideable_fields =
       columns
-      |> Enum.filter(&Map.get(&1, :hideable, true))
+      |> Enum.filter(&hideable?/1)
       |> Enum.map(& &1.field)
       |> MapSet.new()
 
