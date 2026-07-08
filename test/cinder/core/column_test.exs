@@ -3,6 +3,45 @@ defmodule Cinder.ColumnTest do
 
   alias Cinder.Column
 
+  defmodule FakePII do
+    def sensitive?(_resource, field), do: field in ["email", "address.name"]
+  end
+
+  describe "sensitive column masking" do
+    setup do
+      Application.put_env(:cinder, :sensitive_fields, {FakePII, :sensitive?})
+      Application.put_env(:cinder, :sensitive_class, "ph-mask")
+
+      on_exit(fn ->
+        Application.delete_env(:cinder, :sensitive_fields)
+        Application.delete_env(:cinder, :sensitive_class)
+      end)
+    end
+
+    test "sets mask_class on a sensitive field, leaving class untouched" do
+      column = Column.parse_column(%{field: "email", label: "Email"}, nil)
+      assert column.mask_class == "ph-mask"
+      assert column.class == ""
+    end
+
+    test "keeps column class and mask_class separate so the header stays unmasked" do
+      column = Column.parse_column(%{field: "address.name", label: "Receiver", class: "w-1/4"}, nil)
+      assert column.class == "w-1/4"
+      assert column.mask_class == "ph-mask"
+    end
+
+    test "does not mask non-sensitive fields" do
+      column = Column.parse_column(%{field: "status", label: "Status"}, nil)
+      assert column.mask_class == ""
+    end
+
+    test "no-op when no classifier is configured" do
+      Application.delete_env(:cinder, :sensitive_fields)
+      column = Column.parse_column(%{field: "email", label: "Email"}, nil)
+      assert column.mask_class == ""
+    end
+  end
+
   describe "parse_column/2" do
     test "parses basic column with defaults" do
       slot = %{field: "name", label: "Name"}
