@@ -111,7 +111,7 @@ defmodule Cinder.Renderers.Table do
                   data-key="selection_checkbox_class"
                 />
               </td>
-              <td :for={column <- @columns} class={[@theme.td_class, column.class]} data-key="td_class">
+              <td :for={column <- @columns} class={[@theme.td_class, column.class, Map.get(column, :mask_class, "")]} data-key="td_class">
                 {render_slot(column.slot, item)}
               </td>
             </tr>
