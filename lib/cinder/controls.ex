@@ -358,7 +358,7 @@ defmodule Cinder.Controls do
       ]}
       data-key="filter_clear_all_class"
     >
-      {dgettext("cinder", "Clear all")}
+      {dgettext("cinder", "Reset filters")}
     </button>
     """
   end

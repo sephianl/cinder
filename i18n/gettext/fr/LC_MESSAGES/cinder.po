@@ -8,11 +8,6 @@ msgstr ""
 "Language: fr\n"
 "Plural-Forms: nplurals=2; plural=(n>1);\n"
 
-#: lib/cinder/controls.ex
-#, elixir-autogen
-msgid "Clear all"
-msgstr "Tout effacer"
-
 #: lib/cinder/filter_manager.ex
 #, elixir-autogen
 msgid "Clear filter"
@@ -200,3 +195,33 @@ msgstr "Une erreur s'est produite lors du chargement des données"
 #, elixir-autogen, elixir-format
 msgid "Page %{current}"
 msgstr "Page %{current}"
+
+#: lib/cinder/renderers/column_prefs.ex
+#, elixir-autogen, elixir-format
+msgid "Close"
+msgstr ""
+
+#: lib/cinder/renderers/column_prefs.ex
+#, elixir-autogen, elixir-format
+msgid "Done"
+msgstr ""
+
+#: lib/cinder/renderers/column_prefs.ex
+#, elixir-autogen, elixir-format
+msgid "Drag to reorder"
+msgstr ""
+
+#: lib/cinder/renderers/column_prefs.ex
+#, elixir-autogen, elixir-format
+msgid "Edit columns"
+msgstr ""
+
+#: lib/cinder/controls.ex
+#, elixir-autogen, elixir-format
+msgid "Reset filters"
+msgstr ""
+
+#: lib/cinder/renderers/column_prefs.ex
+#, elixir-autogen, elixir-format
+msgid "Reset to defaults"
+msgstr ""
