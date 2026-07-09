@@ -350,7 +350,7 @@ defmodule Cinder.Controls do
       class={[@theme.filter_clear_all_class, if(@active_filter_count == 0, do: "invisible", else: "")]}
       data-key="filter_clear_all_class"
     >
-      {dgettext("cinder", "Clear all")}
+      {dgettext("cinder", "Reset filters")}
     </button>
     """
   end
