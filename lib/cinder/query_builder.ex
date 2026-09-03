@@ -36,6 +36,7 @@ defmodule Cinder.QueryBuilder do
     filters = Keyword.get(options, :filters, %{})
     sort_by = Keyword.get(options, :sort_by, [])
     columns = Keyword.get(options, :columns, [])
+    sort_columns = Keyword.get(options, :sort_columns, columns)
     query_opts = Keyword.get(options, :query_opts, [])
     search_term = Keyword.get(options, :search_term, "")
     search_fn = Keyword.get(options, :search_fn)
@@ -44,13 +45,18 @@ defmodule Cinder.QueryBuilder do
       base_query = Ash.Query.new(resource_or_query)
       resource = base_query.resource
 
-      case validate_sortable_fields(sort_by, resource) do
+      # Expand `sort_field`/`sort_with` up front against the sort columns (which
+      # may differ from the filter/search columns) so the resolved fields are
+      # validated alongside the primary sort fields before apply_sorting/2.
+      expanded_sort_by = expand_secondary_sorts(sort_by, sort_columns)
+
+      case validate_sortable_fields(expanded_sort_by, resource) do
         :ok ->
           prepared_query =
             base_query
             |> apply_filters(filters, columns)
             |> apply_search(search_term, columns, search_fn)
-            |> apply_sorting(sort_by)
+            |> apply_sorting(expanded_sort_by)
             |> apply_action(options)
 
           {:ok, prepared_query}
@@ -562,9 +568,11 @@ defmodule Cinder.QueryBuilder do
   @doc """
   Applies sorting to an Ash query based on sort specifications.
   """
-  def apply_sorting(query, sort_by) when sort_by == [], do: query
+  def apply_sorting(query, sort_by, columns \\ [])
 
-  def apply_sorting(query, sort_by) do
+  def apply_sorting(query, sort_by, _columns) when sort_by == [], do: query
+
+  def apply_sorting(query, sort_by, columns) do
     # Validate sort_by input to prevent Protocol.UndefinedError
     if is_list(sort_by) and Enum.all?(sort_by, &valid_sort_tuple?/1) do
       # Clear any existing sorts to ensure table sorts take precedence
@@ -576,9 +584,12 @@ defmodule Cinder.QueryBuilder do
           query
         end
 
-      # Process sorts individually to handle relationship sorts properly,
-      # giving embedded fields special handling with calc expressions
-      Enum.reduce(sort_by, query, fn {field, direction}, acc_query ->
+      # Expand each sorted field with its column's secondary sort fields (applied
+      # in the same direction), then process sorts individually to handle
+      # relationship sorts properly, giving embedded fields special handling.
+      sort_by
+      |> expand_secondary_sorts(columns)
+      |> Enum.reduce(query, fn {field, direction}, acc_query ->
         # Parse field to determine if it needs special handling for embedded fields
         case Cinder.Filter.Helpers.parse_field_notation(field) do
           {:embedded, embed_field, field_name} ->
@@ -607,6 +618,37 @@ defmodule Cinder.QueryBuilder do
 
       query
     end
+  end
+
+  # Resolves each {field, direction} against its matching column: the primary
+  # field becomes the column's `sort_field` (when set), followed by the column's
+  # `sort_with` secondary fields, all in the same direction. This lets a column
+  # filter/display one field while sorting another (e.g. friendly_position vs
+  # position) with optional tiebreakers. Duplicate fields are collapsed keeping
+  # the first (earliest) occurrence, matching SQL's "first ORDER BY column wins"
+  # semantics. Malformed entries are passed through untouched for apply_sorting's
+  # validation to reject.
+  defp expand_secondary_sorts(sort_by, columns) do
+    sort_by
+    |> Enum.flat_map(fn
+      {field, direction} = sort ->
+        case Enum.find(columns, &(&1.field == field)) do
+          nil ->
+            [sort]
+
+          column ->
+            primary_field = Map.get(column, :sort_field) || field
+            secondary_fields = Map.get(column, :sort_with) || []
+            [{primary_field, direction} | Enum.map(secondary_fields, &{&1, direction})]
+        end
+
+      other ->
+        [other]
+    end)
+    |> Enum.uniq_by(fn
+      {field, _direction} -> field
+      other -> other
+    end)
   end
 
   # Helper function to apply embedded field sorting using calc expressions

@@ -160,7 +160,7 @@ defmodule Cinder.Themes.Modern do
   set :sort_none_icon_class, "w-3 h-3 text-gray-500 opacity-75"
 
   # Loading
-  set :loading_overlay_class, "absolute top-10 right-10"
+  set :loading_overlay_class, "absolute top-10 right-10 cinder-loading-indicator"
   set :loading_container_class, "flex items-center text-sm text-blue-600 font-medium"
   set :loading_spinner_class, "animate-spin h-5 w-5 text-blue-600 mr-2"
   set :loading_spinner_circle_class, "opacity-25"
@@ -219,4 +219,11 @@ defmodule Cinder.Themes.Modern do
   set :button_secondary_class, "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
   set :button_danger_class, "bg-red-600 text-white hover:bg-red-700"
   set :button_disabled_class, "opacity-50 cursor-not-allowed"
+
+  # Column preferences (Edit columns drawer)
+  set :column_prefs_button_class,
+      "inline-flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+
+  set :column_prefs_done_button_class,
+      "px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-150"
 end

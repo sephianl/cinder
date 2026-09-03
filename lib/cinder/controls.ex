@@ -129,7 +129,8 @@ defmodule Cinder.Controls do
       filters_label: assigns.filters_label,
       filter_mode: filter_mode,
       filter_values: filter_values,
-      raw_filter_params: raw_filter_params
+      raw_filter_params: raw_filter_params,
+      all_page_selected?: Map.get(assigns, :all_page_selected?, false)
     }
   end
 
@@ -197,6 +198,89 @@ defmodule Cinder.Controls do
     </div>
     """
   end
+
+  @doc """
+  Renders the optional-filter selector: search, the currently-shown filters, and
+  an "add filter" dropdown listing every available (visible) filter.
+
+  Only filters the operator has added — or that already carry a value — are shown
+  as inputs; the rest live behind the dropdown. Because the controls data is built
+  from the table's *visible* columns, hidden columns' filters never appear and the
+  filter order follows the column order.
+
+  ## Attributes
+
+  - `controls` — the controls data map from `build_controls_data/1`
+  - `shown` — a `MapSet` of field strings the operator has revealed
+  """
+  attr :controls, :map, required: true
+  attr :shown, :any, required: true
+
+  def render_filter_selector(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :visible,
+        Enum.filter(assigns.controls.filters, fn {_key, filter} ->
+          shown?(filter, assigns.shown)
+        end)
+      )
+
+    ~H"""
+    <div class="flex flex-wrap items-end gap-4">
+      <.render_search
+        search={@controls.search}
+        theme={@controls.theme}
+        target={@controls.target}
+      />
+
+      <.render_filter
+        :for={{_key, filter} <- @visible}
+        filter={filter}
+        theme={@controls.theme}
+        target={@controls.target}
+        filter_values={@controls.filter_values}
+        raw_filter_params={@controls.raw_filter_params}
+      />
+
+      <details :if={@controls.filters != []} class="relative self-center">
+        <summary
+          class={[@controls.theme.column_prefs_button_class, "list-none cursor-pointer"]}
+          data-key="column_prefs_button_class"
+        >
+          {@controls.filters_label}
+        </summary>
+        <ul class="absolute right-0 z-10 mt-1 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+          <li :for={{_key, filter} <- @controls.filters}>
+            <button
+              type="button"
+              phx-click={toggle(filter, @shown, @controls.target)}
+              data-field={filter.field}
+              class="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <span class="w-4 text-center">{if shown?(filter, @shown), do: "✓", else: "+"}</span>
+              {filter.label}
+            </button>
+          </li>
+        </ul>
+      </details>
+    </div>
+    """
+  end
+
+  # Removing clears the value at Cinder first (so a hidden filter never keeps
+  # filtering invisibly), then drops it from the shown set.
+  defp toggle(filter, shown, target) do
+    if shown?(filter, shown) do
+      JS.push("remove_filter", value: %{"field" => filter.field}, target: target)
+    else
+      JS.push("add_filter", value: %{"field" => filter.field}, target: target)
+    end
+  end
+
+  defp shown?(filter, shown), do: MapSet.member?(shown, filter.field) or active?(filter)
+
+  defp active?(%{value: value}), do: value not in [nil, "", []]
 
   @doc """
   Renders the default search input.
@@ -314,17 +398,43 @@ defmodule Cinder.Controls do
           </span>
         </span>
       <% end %>
-      <button
+      <.render_clear_all
         :if={@has_filters}
-        type="button"
-        phx-click="clear_all_filters"
-        phx-target={@target}
-        class={[@theme.filter_clear_all_class, if(@active_filter_count == 0, do: "invisible", else: "")]}
-        data-key="filter_clear_all_class"
-      >
-        {dgettext("cinder", "Clear all")}
-      </button>
+        active_filter_count={@active_filter_count}
+        target={@target}
+        theme={@theme}
+      />
     </div>
+    """
+  end
+
+  @doc """
+  Renders the "Clear all" filters button on its own.
+
+  Extracted from `render_header/1` so it can be placed directly in a custom
+  `:controls` slot layout, next to the rendered filters.
+
+  ## Attributes
+
+  - `active_filter_count` — number of active filters (button is hidden when zero)
+  - `target` — LiveComponent target for `phx-target`
+  - `theme` — theme map
+  """
+  attr :active_filter_count, :integer, required: true
+  attr :target, :any, default: nil
+  attr :theme, :map, required: true
+
+  def render_clear_all(assigns) do
+    ~H"""
+    <button
+      type="button"
+      phx-click="clear_all_filters"
+      phx-target={@target}
+      class={[@theme.filter_clear_all_class, if(@active_filter_count == 0, do: "invisible", else: "")]}
+      data-key="filter_clear_all_class"
+    >
+      {dgettext("cinder", "Reset filters")}
+    </button>
     """
   end
 

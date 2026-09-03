@@ -35,6 +35,14 @@ defmodule Cinder.Renderers.List do
       |> assign(:list_container_class, container_class)
       |> assign(:list_item_class, item_class)
       |> assign(:list_item_data_key, item_data_key)
+      |> assign(
+        :all_page_selected?,
+        all_page_selected?(
+          Map.get(assigns, :selected_ids, MapSet.new()),
+          Map.get(assigns, :data, []),
+          Map.get(assigns, :id_field, :id)
+        )
+      )
 
     ~H"""
     <div class={[@theme.container_class, "relative"]} data-key="container_class">
@@ -56,6 +64,7 @@ defmodule Cinder.Renderers.List do
           search_placeholder={@search_placeholder}
           raw_filter_params={Map.get(assigns, :raw_filter_params, %{})}
           controls_slot={Map.get(assigns, :controls_slot, [])}
+          all_page_selected?={@all_page_selected?}
         />
 
         <!-- Sort Controls (button group since no table headers) -->
@@ -84,9 +93,9 @@ defmodule Cinder.Renderers.List do
         <%= if @has_item_slot do %>
           <div
             :for={item <- @data} :if={not @error}
-            class={get_item_classes_with_selection(@list_item_class, Map.get(assigns, :selectable, false), Map.get(assigns, :selected_ids, MapSet.new()), item, Map.get(assigns, :id_field, :id), @item_click, @theme)}
+            class={get_item_classes_with_selection(@list_item_class, Map.get(assigns, :selectable, false), Map.get(assigns, :select_on_row_click, true), Map.get(assigns, :selected_ids, MapSet.new()), item, Map.get(assigns, :id_field, :id), @item_click, @theme)}
             data-key={@list_item_data_key}
-            phx-click={item_click_action(@item_click, Map.get(assigns, :selectable, false), item, Map.get(assigns, :id_field, :id), @myself)}
+            phx-click={item_click_action(@item_click, Map.get(assigns, :selectable, false) and Map.get(assigns, :select_on_row_click, true), item, Map.get(assigns, :id_field, :id), @myself)}
           >
             <div
               :if={Map.get(assigns, :selectable, false)}
@@ -196,6 +205,7 @@ defmodule Cinder.Renderers.List do
   defp get_item_classes_with_selection(
          base_class,
          selectable,
+         select_on_row_click,
          selected_ids,
          item,
          id_field,
@@ -204,8 +214,8 @@ defmodule Cinder.Renderers.List do
        ) do
     classes = [base_class]
 
-    # Add cursor-pointer if item is clickable (either via item_click or selectable without item_click)
-    clickable = item_click != nil or (selectable and item_click == nil)
+    # Add cursor-pointer if item is clickable (either via item_click or selectable row-click without item_click)
+    clickable = item_click != nil or (selectable and select_on_row_click and item_click == nil)
     classes = if clickable, do: classes ++ ["cursor-pointer"], else: classes
 
     if selectable and item_selected?(selected_ids, item, id_field) do
@@ -233,4 +243,12 @@ defmodule Cinder.Renderers.List do
     id = to_string(Map.get(item, id_field))
     MapSet.member?(selected_ids, id)
   end
+
+  defp all_page_selected?(selected_ids, data, id_field) when is_list(data) and data != [] do
+    Enum.all?(data, fn item ->
+      item_selected?(selected_ids, item, id_field)
+    end)
+  end
+
+  defp all_page_selected?(_selected_ids, _data, _id_field), do: false
 end

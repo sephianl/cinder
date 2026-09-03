@@ -176,7 +176,7 @@ defmodule Cinder.Themes.Compact do
   set :search_icon_class, "w-3 h-3 text-gray-400"
 
   # Loading
-  set :loading_overlay_class, "absolute top-6 right-6"
+  set :loading_overlay_class, "absolute top-6 right-6 cinder-loading-indicator"
   set :loading_container_class, "flex items-center text-xs text-blue-600 font-medium"
   set :loading_spinner_class, "animate-spin h-3 w-3 text-blue-600 mr-1"
   set :loading_spinner_circle_class, "opacity-25"
@@ -221,4 +221,29 @@ defmodule Cinder.Themes.Compact do
   set :button_secondary_class, "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
   set :button_danger_class, "bg-red-600 text-white hover:bg-red-700"
   set :button_disabled_class, "opacity-50 cursor-not-allowed"
+
+  # Column preferences (Edit columns drawer)
+  set :column_prefs_button_class,
+      "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+
+  set :column_prefs_panel_class,
+      "fixed top-0 right-0 h-full w-80 max-w-full bg-white text-gray-900 border-l border-gray-300 shadow-sm flex flex-col z-50 transition-transform duration-300 ease-in-out"
+
+  set :column_prefs_header_class,
+      "flex items-center justify-between px-3 py-2 border-b border-gray-300"
+
+  set :column_prefs_title_class, "text-sm font-semibold text-gray-900"
+
+  set :column_prefs_item_class,
+      "flex items-center gap-2 px-3 py-2 text-xs border-b border-gray-200 last:border-b-0"
+
+  set :column_prefs_label_class, "flex-1 text-xs select-none text-gray-900"
+
+  set :column_prefs_footer_class,
+      "border-t border-gray-300 px-3 py-2 flex justify-between"
+
+  set :column_prefs_reset_button_class, "text-xs text-gray-600 hover:underline"
+
+  set :column_prefs_done_button_class,
+      "px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700"
 end
