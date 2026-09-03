@@ -75,8 +75,9 @@ defmodule Cinder.Renderers.TableSelectionTest do
       assert html =~ ~s(phx-click="toggle_column_prefs_drawer")
       assert html =~ ~s(data-key="column_prefs_header_trigger_class")
       assert html =~ ~s(viewBox="0 0 8 7")
+
       assert html =~
-         ~r/<button[^>]*data-key="column_prefs_header_trigger_class"[^>]*>[\s\S]*?<svg[^>]*viewBox="0 0 8 7"/
+               ~r/<button[^>]*data-key="column_prefs_header_trigger_class"[^>]*>[\s\S]*?<svg[^>]*viewBox="0 0 8 7"/
     end
 
     test "columns_trigger slot replaces the default trigger button" do
@@ -121,6 +122,26 @@ defmodule Cinder.Renderers.TableSelectionTest do
 
       refute html =~ ~s(data-key="column_prefs_header_trigger_class")
       assert html =~ "Status"
+    end
+
+    test "renders a trailing trigger cell when the last column is data (not a fieldless action)" do
+      assigns = Map.merge(base_assigns(), %{column_preferences?: true})
+
+      html = render_component(&TableRenderer.render/1, assigns)
+
+      # base_assigns' only column is data (:name), so the trigger lives in an
+      # appended header cell rather than hijacking a fieldless action column.
+      assert html =~ ~s(phx-click="toggle_column_prefs_drawer")
+      assert html =~ ~s(data-key="column_prefs_header_trigger_class")
+    end
+
+    test "header_trigger=false suppresses the trailing trigger on a data last column" do
+      assigns =
+        Map.merge(base_assigns(), %{column_preferences?: true, header_trigger: false})
+
+      html = render_component(&TableRenderer.render/1, assigns)
+
+      refute html =~ ~s(data-key="column_prefs_header_trigger_class")
     end
 
     test "no header trigger when column preferences are off" do

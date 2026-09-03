@@ -361,16 +361,44 @@ defmodule Cinder.LiveComponent do
     {:noreply, socket}
   end
 
+  # Filter selector: reveal a filter input for a field.
+  @impl true
+  def handle_event("add_filter", %{"field" => field}, socket) do
+    {:noreply, update(socket, :shown_filters, &MapSet.put(&1, field))}
+  end
+
+  # Filter selector: hide a filter and clear any value it was applying.
+  @impl true
+  def handle_event("remove_filter", %{"field" => field}, socket) do
+    {:noreply,
+     socket
+     |> clear_field_filter(field)
+     |> drop_shown_filter(field)}
+  end
+
   # ============================================================================
   # COLUMN PREFERENCES EVENT HANDLERS
   # ============================================================================
 
   @impl true
   def handle_event("toggle_column_visibility", %{"field" => field}, socket) do
-    {:noreply,
-     update_column_prefs(socket, fn prefs ->
-       Cinder.ColumnPreferences.toggle_hidden(prefs, field, socket.assigns.declared_columns)
-     end)}
+    socket =
+      update_column_prefs(socket, fn prefs ->
+        Cinder.ColumnPreferences.toggle_hidden(prefs, field, socket.assigns.declared_columns)
+      end)
+
+    # A hidden column must not keep filtering: clear its value and drop it from
+    # the shown set so its filter disappears from the selector too.
+    socket =
+      if MapSet.member?(socket.assigns.column_preferences.hidden, field) do
+        socket
+        |> clear_field_filter(field)
+        |> drop_shown_filter(field)
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -520,6 +548,44 @@ defmodule Cinder.LiveComponent do
     socket = notify_state_change(socket, new_filters)
 
     {:noreply, socket}
+  end
+
+  # Clears a single field's filter value (and its autocomplete search term) and
+  # reloads. Shared by the `remove_filter` and hide-column flows so a hidden or
+  # removed filter never keeps filtering invisibly. No-ops when the field has no
+  # active filter (so it's safe on sockets without filter state).
+  defp clear_field_filter(socket, field) do
+    filters = Map.get(socket.assigns, :filters)
+
+    if is_map(filters) and Map.has_key?(filters, field) do
+      new_filters =
+        filters
+        |> Cinder.FilterManager.clear_filter(field)
+        |> Cinder.FilterManager.apply_defaults(Map.get(socket.assigns, :query_columns, []))
+
+      raw_filter_params =
+        socket.assigns
+        |> Map.get(:raw_filter_params, %{})
+        |> Map.delete("#{field}_autocomplete_search")
+
+      socket
+      |> assign(:filters, new_filters)
+      |> assign(:raw_filter_params, raw_filter_params)
+      |> assign(:current_page, 1)
+      |> assign(:after_keyset, nil)
+      |> assign(:before_keyset, nil)
+      |> load_data()
+      |> notify_state_change(new_filters)
+    else
+      socket
+    end
+  end
+
+  defp drop_shown_filter(socket, field) do
+    case socket.assigns do
+      %{shown_filters: shown} -> assign(socket, :shown_filters, MapSet.delete(shown, field))
+      _ -> socket
+    end
   end
 
   # ============================================================================
@@ -944,6 +1010,8 @@ defmodule Cinder.LiveComponent do
     |> assign(:column_preferences?, prefs_on?)
     |> assign(:show_prefs, assigns[:show_prefs] || false)
     |> assign(:header_trigger, assigns[:header_trigger] != false)
+    |> assign(:filter_selector?, assigns[:filter_selector?] || false)
+    |> assign_new(:shown_filters, fn -> MapSet.new() end)
     |> assign(:on_columns_change, assigns[:on_columns_change])
     |> assign_new(:column_preferences, fn ->
       Cinder.ColumnPreferences.from_columns(assigns[:col] || [])
@@ -1014,7 +1082,26 @@ defmodule Cinder.LiveComponent do
     |> assign(:columns, visible)
     |> assign(:prefs_drawer_columns, drawer)
     |> assign(:query_columns, query)
+    |> assign(:filter_columns, filter_columns(visible, query, declared_columns))
     |> assign(:filter_field_names, filterable_field_names(query))
+  end
+
+  # Columns whose filters the controls should show: the visible display columns
+  # (so hidden columns drop their filter and order follows column order) plus any
+  # query-only filterable columns, which aren't display columns and therefore have
+  # no visibility to honour.
+  defp filter_columns(visible, query, declared) do
+    visible_filterable = Enum.filter(visible, & &1.filterable)
+    seen = MapSet.new(visible_filterable, & &1.field)
+    declared_fields = MapSet.new(declared, & &1.field)
+
+    query_only =
+      Enum.filter(query, fn column ->
+        column.filterable and not MapSet.member?(seen, column.field) and
+          not MapSet.member?(declared_fields, column.field)
+      end)
+
+    visible_filterable ++ query_only
   end
 
   defp visible_columns(declared, false, _prefs), do: declared

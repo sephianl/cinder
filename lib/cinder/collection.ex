@@ -269,6 +269,12 @@ defmodule Cinder.Collection do
       "When true (default), the last fieldless action column's header becomes the prefs trigger. Set false for tables whose last column is data (not an action) and use show_prefs instead."
   )
 
+  attr(:filter_selector?, :boolean,
+    default: false,
+    doc:
+      "When true, Cinder renders a built-in filter selector (search + active filters + an \"add filter\" dropdown) in place of the always-on filter layout, and manages which filters are shown. Filters track the visible columns: hiding a column removes its filter and reordering columns reorders the filters. Ignored when a :controls slot is given."
+  )
+
   attr(:on_columns_change, :any,
     default: nil,
     doc:
@@ -432,6 +438,7 @@ defmodule Cinder.Collection do
       |> assign_new(:column_preferences?, fn -> false end)
       |> assign_new(:show_prefs, fn -> false end)
       |> assign_new(:header_trigger, fn -> true end)
+      |> assign_new(:filter_selector?, fn -> false end)
       |> assign_new(:on_columns_change, fn -> nil end)
       |> assign_new(:show_pagination, fn -> true end)
       |> assign(:loading_message, assigns[:loading_message] || dgettext("cinder", "Loading..."))
@@ -582,6 +589,7 @@ defmodule Cinder.Collection do
         column_preferences?={@column_preferences?}
         show_prefs={@show_prefs}
         header_trigger={@header_trigger}
+        filter_selector?={@filter_selector?}
         on_columns_change={@on_columns_change}
         bulk_action_slots={@bulk_action_slots}
         sort_mode={@sort_mode}
