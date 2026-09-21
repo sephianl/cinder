@@ -252,13 +252,25 @@ defmodule Cinder.Controls do
         </summary>
         <ul class="absolute right-0 z-10 mt-1 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
           <li :for={{_key, filter} <- @controls.filters}>
+            <% active = shown?(filter, @shown) %>
             <button
               type="button"
               phx-click={toggle(filter, @shown, @controls.target)}
               data-field={filter.field}
-              class="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-pressed={to_string(active)}
+              class={[
+                "flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm",
+                active && "bg-blue-50 font-medium text-blue-900 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-100 dark:hover:bg-blue-900/60",
+                !active && "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+              ]}
             >
-              <span class="w-4 text-center">{if shown?(filter, @shown), do: "✓", else: "+"}</span>
+              <span class={[
+                "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                active && "border-blue-600 bg-blue-600 text-white dark:border-blue-500 dark:bg-blue-500",
+                !active && "border-gray-300 dark:border-gray-600"
+              ]}>
+                <span :if={active} class="hero-check h-3 w-3" />
+              </span>
               {filter.label}
             </button>
           </li>
