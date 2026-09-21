@@ -186,14 +186,18 @@ defmodule Cinder.MapColumn do
   defp filter_number(query, source, key, :range, "<=", number) do
     import Ash.Expr
 
+    # The max bound constrains the stored range's upper bound (`to`), not `from`,
+    # so a stored {from: 1, to: 100} is excluded by a max of 50.
     Ash.Query.filter(
       query,
-      fragment("(? -> ? ->> 'from')::numeric <= ?", ^ref(source), ^key, ^number)
+      fragment("(? -> ? ->> 'to')::numeric <= ?", ^ref(source), ^key, ^number)
     )
   end
 
-  # Dates are stored as ISO-8601 strings, which order chronologically as text —
-  # so a plain string comparison is both correct and safe to bind.
+  # The stored JSONB value may be a bare date (`2026-03-15`) or a full datetime
+  # (`2026-03-15T10:00:00Z`), while the filter's bounds are dates. Comparing them
+  # as text drops same-day datetimes (`"2026-03-15T…" > "2026-03-15"`), so cast
+  # both the stored value and the bound to `date` and compare by day.
   defp date_filter_fn(source, key, mode) do
     fn query, %{value: %{from: from, to: to}} ->
       query
@@ -206,22 +210,23 @@ defmodule Cinder.MapColumn do
 
   defp date_bound(query, source, key, :scalar, ">=", bound) do
     import Ash.Expr
-    Ash.Query.filter(query, fragment("(? ->> ?) >= ?", ^ref(source), ^key, ^bound))
+    Ash.Query.filter(query, fragment("(? ->> ?)::date >= ?::date", ^ref(source), ^key, ^bound))
   end
 
   defp date_bound(query, source, key, :scalar, "<=", bound) do
     import Ash.Expr
-    Ash.Query.filter(query, fragment("(? ->> ?) <= ?", ^ref(source), ^key, ^bound))
+    Ash.Query.filter(query, fragment("(? ->> ?)::date <= ?::date", ^ref(source), ^key, ^bound))
   end
 
   defp date_bound(query, source, key, :range, ">=", bound) do
     import Ash.Expr
-    Ash.Query.filter(query, fragment("(? -> ? ->> 'from') >= ?", ^ref(source), ^key, ^bound))
+    Ash.Query.filter(query, fragment("(? -> ? ->> 'from')::date >= ?::date", ^ref(source), ^key, ^bound))
   end
 
+  # The `to` bound constrains the stored range's upper bound (`to`), not `from`.
   defp date_bound(query, source, key, :range, "<=", bound) do
     import Ash.Expr
-    Ash.Query.filter(query, fragment("(? -> ? ->> 'from') <= ?", ^ref(source), ^key, ^bound))
+    Ash.Query.filter(query, fragment("(? -> ? ->> 'to')::date <= ?::date", ^ref(source), ^key, ^bound))
   end
 
   defp boolean_filter_fn(source, key) do
