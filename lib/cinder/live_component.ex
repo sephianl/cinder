@@ -96,6 +96,10 @@ defmodule Cinder.LiveComponent do
     do_update_items_if_visible(socket, nil, ids, update_fn, id_field)
   end
 
+  def update(%{__force_hydrate__: true}, socket) do
+    {:ok, force_hydrate_column_prefs(socket)}
+  end
+
   def update(assigns, socket) do
     prev_state = data_state(socket.assigns)
 
@@ -103,8 +107,10 @@ defmodule Cinder.LiveComponent do
       socket
       |> assign(assigns)
       |> assign_defaults()
+      |> maybe_schedule_force_hydrate()
       |> assign_column_definitions()
       |> decode_url_state(assigns)
+      |> seed_default_filters()
       |> load_data_if_needed(prev_state)
 
     {:ok, socket}
@@ -268,7 +274,10 @@ defmodule Cinder.LiveComponent do
 
   @impl true
   def handle_event("clear_filter", %{"key" => key}, socket) do
-    new_filters = Cinder.FilterManager.clear_filter(socket.assigns.filters, key)
+    new_filters =
+      socket.assigns.filters
+      |> Cinder.FilterManager.clear_filter(key)
+      |> Cinder.FilterManager.apply_defaults(socket.assigns.query_columns)
 
     # Also clear the autocomplete search term for this field
     raw_filter_params = Map.get(socket.assigns, :raw_filter_params, %{})
@@ -335,7 +344,10 @@ defmodule Cinder.LiveComponent do
 
   @impl true
   def handle_event("clear_all_filters", _params, socket) do
-    new_filters = Cinder.FilterManager.clear_all_filters(socket.assigns.filters)
+    new_filters =
+      socket.assigns.filters
+      |> Cinder.FilterManager.clear_all_filters()
+      |> Cinder.FilterManager.apply_defaults(socket.assigns.query_columns)
 
     socket =
       socket
@@ -347,6 +359,73 @@ defmodule Cinder.LiveComponent do
       |> notify_state_change()
 
     {:noreply, socket}
+  end
+
+  # Filter selector: reveal a filter input for a field.
+  @impl true
+  def handle_event("add_filter", %{"field" => field}, socket) do
+    {:noreply, update(socket, :shown_filters, &MapSet.put(&1, field))}
+  end
+
+  # Filter selector: hide a filter and clear any value it was applying.
+  @impl true
+  def handle_event("remove_filter", %{"field" => field}, socket) do
+    {:noreply,
+     socket
+     |> clear_field_filter(field)
+     |> drop_shown_filter(field)}
+  end
+
+  # ============================================================================
+  # COLUMN PREFERENCES EVENT HANDLERS
+  # ============================================================================
+
+  @impl true
+  def handle_event("toggle_column_visibility", %{"field" => field}, socket) do
+    socket =
+      update_column_prefs(socket, fn prefs ->
+        Cinder.ColumnPreferences.toggle_hidden(prefs, field, socket.assigns.declared_columns)
+      end)
+
+    # A hidden column must not keep filtering: clear its value and drop it from
+    # the shown set so its filter disappears from the selector too.
+    socket =
+      if MapSet.member?(socket.assigns.column_preferences.hidden, field) do
+        socket
+        |> clear_field_filter(field)
+        |> drop_shown_filter(field)
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("reorder_columns", %{"order" => new_order}, socket) when is_list(new_order) do
+    {:noreply,
+     update_column_prefs(socket, fn prefs ->
+       Cinder.ColumnPreferences.set_order(prefs, new_order, socket.assigns.declared_columns)
+     end)}
+  end
+
+  @impl true
+  def handle_event("reset_column_preferences", _params, socket) do
+    {:noreply,
+     update_column_prefs(socket, fn _prefs ->
+       Cinder.ColumnPreferences.from_columns(socket.assigns.declared_columns)
+     end)}
+  end
+
+  @impl true
+  def handle_event("apply_column_preferences", payload, socket) do
+    {:noreply, hydrate_column_prefs(socket, payload)}
+  end
+
+  @impl true
+  def handle_event("toggle_column_prefs_drawer", _params, socket) do
+    {:noreply,
+     assign(socket, :column_prefs_drawer_open?, !socket.assigns[:column_prefs_drawer_open?])}
   end
 
   # ============================================================================
@@ -429,6 +508,7 @@ defmodule Cinder.LiveComponent do
     new_filters =
       raw_filter_params
       |> Cinder.FilterManager.params_to_filters(query_columns)
+      |> Cinder.FilterManager.apply_defaults(query_columns)
 
     search_term =
       case Map.get(params, "search") do
@@ -468,6 +548,44 @@ defmodule Cinder.LiveComponent do
     socket = notify_state_change(socket, new_filters)
 
     {:noreply, socket}
+  end
+
+  # Clears a single field's filter value (and its autocomplete search term) and
+  # reloads. Shared by the `remove_filter` and hide-column flows so a hidden or
+  # removed filter never keeps filtering invisibly. No-ops when the field has no
+  # active filter (so it's safe on sockets without filter state).
+  defp clear_field_filter(socket, field) do
+    filters = Map.get(socket.assigns, :filters)
+
+    if is_map(filters) and Map.has_key?(filters, field) do
+      new_filters =
+        filters
+        |> Cinder.FilterManager.clear_filter(field)
+        |> Cinder.FilterManager.apply_defaults(Map.get(socket.assigns, :query_columns, []))
+
+      raw_filter_params =
+        socket.assigns
+        |> Map.get(:raw_filter_params, %{})
+        |> Map.delete("#{field}_autocomplete_search")
+
+      socket
+      |> assign(:filters, new_filters)
+      |> assign(:raw_filter_params, raw_filter_params)
+      |> assign(:current_page, 1)
+      |> assign(:after_keyset, nil)
+      |> assign(:before_keyset, nil)
+      |> load_data()
+      |> notify_state_change(new_filters)
+    else
+      socket
+    end
+  end
+
+  defp drop_shown_filter(socket, field) do
+    case socket.assigns do
+      %{shown_filters: shown} -> assign(socket, :shown_filters, MapSet.delete(shown, field))
+      _ -> socket
+    end
   end
 
   # ============================================================================
@@ -569,6 +687,30 @@ defmodule Cinder.LiveComponent do
   defp maybe_notify_query_change(socket, query) do
     if event_name = socket.assigns[:on_query_change] do
       send(self(), {event_name, %{query: query, id: socket.assigns.id}})
+    end
+
+    socket
+  end
+
+  defp update_column_prefs(socket, prefs_fn) do
+    new_prefs = prefs_fn.(socket.assigns.column_preferences)
+
+    socket
+    |> assign(:column_preferences, new_prefs)
+    |> assign_column_definitions()
+    |> push_column_prefs_to_client(new_prefs)
+    |> maybe_notify_columns_change(new_prefs)
+  end
+
+  defp push_column_prefs_to_client(socket, prefs) do
+    payload = Cinder.ColumnPreferences.to_payload(prefs)
+    push_event(socket, "cinder:column_prefs_changed", Map.put(payload, :id, socket.assigns.id))
+  end
+
+  defp maybe_notify_columns_change(socket, prefs) do
+    if event_name = socket.assigns[:on_columns_change] do
+      payload = %{prefs: Cinder.ColumnPreferences.to_payload(prefs), id: socket.assigns.id}
+      send(self(), {event_name, payload})
     end
 
     socket
@@ -794,6 +936,16 @@ defmodule Cinder.LiveComponent do
     end
   end
 
+  defp seed_default_filters(socket) do
+    filters =
+      Cinder.FilterManager.apply_defaults(
+        socket.assigns.filters,
+        socket.assigns.query_columns
+      )
+
+    assign(socket, :filters, filters)
+  end
+
   defp maybe_assign_cursor(socket, _key, nil), do: socket
   defp maybe_assign_cursor(socket, key, cursor), do: assign(socket, key, cursor)
 
@@ -840,37 +992,154 @@ defmodule Cinder.LiveComponent do
     |> assign(:last_keyset, assigns[:last_keyset])
     # Selection state
     |> assign(:selectable, assigns[:selectable] || false)
+    |> assign(:select_on_row_click, Map.get(assigns, :select_on_row_click, true))
     |> assign_new(:selected_ids, fn -> MapSet.new() end)
     |> assign(:on_selection_change, assigns[:on_selection_change])
     |> assign(:on_query_change, assigns[:on_query_change])
     |> assign(:id_field, assigns[:id_field] || :id)
     |> assign(:sort_mode, assigns[:sort_mode] || :additive)
+    |> assign_column_prefs_defaults(assigns)
     # Bulk actions
     |> assign_new(:bulk_action_slots, fn -> [] end)
   end
 
-  defp assign_column_definitions(socket) do
-    # Display columns - already processed by Collection, use directly
-    columns = socket.assigns.col
-
-    # Query columns - columns used for filtering and searching
-    # Includes filterable columns, searchable columns, and filter-only slots
-    query_columns =
-      case Map.get(socket.assigns, :query_columns) do
-        nil -> columns
-        qc -> qc
-      end
-
-    # Field names of filterable columns (for URL state management)
-    filter_field_names =
-      query_columns
-      |> Enum.filter(& &1.filterable)
-      |> Enum.map(& &1.field)
+  defp assign_column_prefs_defaults(socket, assigns) do
+    prefs_on? = assigns[:column_preferences?] || false
 
     socket
-    |> assign(:columns, columns)
-    |> assign(:query_columns, query_columns)
-    |> assign(:filter_field_names, filter_field_names)
+    |> assign(:column_preferences?, prefs_on?)
+    |> assign(:show_prefs, assigns[:show_prefs] || false)
+    |> assign(:header_trigger, assigns[:header_trigger] != false)
+    |> assign(:filter_selector?, assigns[:filter_selector?] || false)
+    |> assign_new(:shown_filters, fn -> MapSet.new() end)
+    |> assign(:on_columns_change, assigns[:on_columns_change])
+    |> assign_new(:column_preferences, fn ->
+      Cinder.ColumnPreferences.from_columns(assigns[:col] || [])
+    end)
+    |> assign_new(:column_prefs_drawer_open?, fn -> false end)
+    |> assign_new(:column_prefs_hydrated?, fn -> not prefs_on? end)
+    |> assign_new(:column_prefs_hydrate_scheduled?, fn -> false end)
+  end
+
+  defp hydrate_column_prefs(socket, payload) do
+    prefs = Cinder.ColumnPreferences.from_payload(payload, socket.assigns.declared_columns)
+
+    socket
+    |> assign(:column_preferences, prefs)
+    |> assign(:column_prefs_hydrated?, true)
+    |> assign_column_definitions()
+  end
+
+  defp force_hydrate_column_prefs(
+         %{assigns: %{column_preferences?: true, column_prefs_hydrated?: false}} = socket
+       ) do
+    socket
+    |> assign(:column_prefs_hydrated?, true)
+    |> assign_column_definitions()
+  end
+
+  defp force_hydrate_column_prefs(socket), do: socket
+
+  defp maybe_schedule_force_hydrate(
+         %{
+           assigns: %{
+             column_preferences?: true,
+             column_prefs_hydrated?: false,
+             column_prefs_hydrate_scheduled?: false
+           }
+         } = socket
+       ) do
+    schedule_force_hydrate_when_connected(socket)
+  end
+
+  defp maybe_schedule_force_hydrate(socket), do: socket
+
+  defp schedule_force_hydrate_when_connected(socket) do
+    if Phoenix.LiveView.connected?(socket) do
+      Phoenix.LiveView.send_update_after(
+        __MODULE__,
+        [id: socket.assigns.id, __force_hydrate__: true],
+        1000
+      )
+
+      assign(socket, :column_prefs_hydrate_scheduled?, true)
+    else
+      socket
+    end
+  end
+
+  defp assign_column_definitions(socket) do
+    declared_columns = socket.assigns.col
+    prefs_on? = socket.assigns[:column_preferences?] || false
+    prefs = socket.assigns.column_preferences
+
+    visible = visible_columns(declared_columns, prefs_on?, prefs)
+    drawer = drawer_columns(declared_columns, visible, prefs_on?, prefs)
+    query = query_columns(socket, declared_columns)
+
+    socket
+    |> assign(:declared_columns, declared_columns)
+    |> assign(:columns, visible)
+    |> assign(:prefs_drawer_columns, drawer)
+    |> assign(:query_columns, query)
+    |> assign(:filter_columns, filter_columns(visible, query, declared_columns))
+    |> assign(:filter_field_names, filterable_field_names(query))
+  end
+
+  # Columns whose filters the controls should show: the visible display columns
+  # (so hidden columns drop their filter and order follows column order) plus any
+  # query-only filterable columns, which aren't display columns and therefore have
+  # no visibility to honour.
+  defp filter_columns(visible, query, declared) do
+    visible_filterable = Enum.filter(visible, & &1.filterable)
+    seen = MapSet.new(visible_filterable, & &1.field)
+    declared_fields = MapSet.new(declared, & &1.field)
+
+    query_only =
+      Enum.filter(query, fn column ->
+        column.filterable and not MapSet.member?(seen, column.field) and
+          not MapSet.member?(declared_fields, column.field)
+      end)
+
+    visible_filterable ++ query_only
+  end
+
+  defp visible_columns(declared, false, _prefs), do: declared
+  defp visible_columns(declared, true, prefs), do: Cinder.ColumnPreferences.apply(declared, prefs)
+
+  defp drawer_columns(declared, _visible, false, _prefs), do: declared
+
+  defp drawer_columns(declared, visible, true, prefs) do
+    (visible ++ Enum.filter(declared, &MapSet.member?(prefs.hidden, &1.field)))
+    |> Enum.reject(fn col ->
+      is_nil(col.field) or Cinder.ColumnPreferences.display_hidden?(col)
+    end)
+    |> dedupe_by_field()
+  end
+
+  # Preferences key on field, so a field maps to one drawer entry. Display-hidden
+  # filter-only columns are already removed above, so this only collapses the
+  # rare case of two visible columns declared with the same field; keep the first.
+  defp dedupe_by_field(columns) do
+    columns
+    |> Enum.map(& &1.field)
+    |> Enum.uniq()
+    |> Enum.map(fn field -> Enum.find(columns, &(&1.field == field)) end)
+  end
+
+  # Columns used for filtering and searching. Cinder.Collection populates this
+  # to include filter-only slots whose fields aren't visible in the table;
+  # falls back to declared_columns when no separate list was provided.
+  defp query_columns(socket, declared_columns) do
+    Map.get(socket.assigns, :query_columns) || declared_columns
+  end
+
+  # Field names of filterable columns. Consumed by Cinder.UrlManager to know
+  # which keys to read out of URL params when restoring filter state.
+  defp filterable_field_names(query_columns) do
+    query_columns
+    |> Enum.filter(& &1.filterable)
+    |> Enum.map(& &1.field)
   end
 
   defp extract_initial_sorts(assigns) do
@@ -994,6 +1263,7 @@ defmodule Cinder.LiveComponent do
       page_size: page_size,
       current_page: current_page,
       columns: query_columns,
+      sort_columns: columns,
       search_term: search_term,
       search_fn: socket.assigns.search_fn,
       pagination_configured: socket.assigns.page_size_config.configurable || page_size != 25,

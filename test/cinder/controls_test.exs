@@ -305,7 +305,7 @@ defmodule Cinder.ControlsTest do
       assert html =~ "Filters"
       assert html =~ "2 active"
       assert html =~ "clear_all_filters"
-      assert html =~ "Clear all"
+      assert html =~ "Reset filters"
       refute html =~ "invisible"
 
       # No active filters: clear all invisible
@@ -476,6 +476,56 @@ defmodule Cinder.ControlsTest do
 
       assert html =~ "HAS_SEARCH"
       assert html =~ "FIELDS:name,status"
+    end
+  end
+
+  describe "render_filter_selector/1" do
+    defp selector_filter(field, value \\ "") do
+      {String.to_atom(field),
+       %{
+         field: field,
+         label: String.capitalize(field),
+         type: :text,
+         value: value,
+         options: [],
+         name: "filters[#{field}]",
+         id: "t-filter-#{field}"
+       }}
+    end
+
+    defp render_selector(filters, shown) do
+      controls = %{
+        filters: filters,
+        search: nil,
+        theme: base_theme(),
+        target: nil,
+        filters_label: "Filters",
+        filter_values: %{},
+        raw_filter_params: %{}
+      }
+
+      render_component(&Controls.render_filter_selector/1, %{controls: controls, shown: shown})
+    end
+
+    test "lists every filterable column with add/remove toggles" do
+      html =
+        render_selector(
+          [selector_filter("name"), selector_filter("status")],
+          MapSet.new(["name"])
+        )
+
+      # Both columns appear in the "add filter" dropdown.
+      assert html =~ "Name"
+      assert html =~ "Status"
+      # The shown one can be removed; the hidden one can be added.
+      assert html =~ "remove_filter"
+      assert html =~ "add_filter"
+    end
+
+    test "shows a filter that already carries a value even if not explicitly added" do
+      html = render_selector([selector_filter("name", "carried-value")], MapSet.new())
+
+      assert html =~ "carried-value"
     end
   end
 end

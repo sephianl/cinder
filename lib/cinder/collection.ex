@@ -239,10 +239,48 @@ defmodule Cinder.Collection do
     doc: "Enable row/item selection via checkboxes"
   )
 
+  attr(:select_on_row_click, :boolean,
+    default: true,
+    doc:
+      "When selectable and no click handler is set, whether clicking anywhere on the row/item toggles selection. Set false to restrict selection to the checkbox only."
+  )
+
   attr(:on_selection_change, :any,
     default: nil,
     doc:
       "Event name (atom or string) sent to parent when selection changes. Parent receives {event_name, %{selected_ids: MapSet.t(), selected_count: integer(), component_id: string(), action: atom()}}."
+  )
+
+  attr(:column_preferences?, :boolean,
+    default: false,
+    doc:
+      "Enable user-editable column visibility and ordering. When true, the last action column's header becomes a \"Columns\" trigger that opens the prefs drawer, prefs are persisted to localStorage by table id, and on_columns_change fires on every change. Requires a stable :id."
+  )
+
+  attr(:show_prefs, :boolean,
+    default: false,
+    doc:
+      "When true (and column_preferences? is on), also render a standalone \"Columns\" button at the top-right, in addition to the header trigger."
+  )
+
+  attr(:header_trigger, :boolean,
+    default: true,
+    doc:
+      "When true (default), the last fieldless action column's header becomes the prefs trigger. Set false for tables whose last column is data (not an action) and use show_prefs instead."
+  )
+
+  attr(:filter_selector?, :boolean,
+    default: false,
+    doc:
+      "When true, Cinder renders a built-in filter selector (search + active filters + an \"add filter\" dropdown) in place of the always-on filter layout, and manages which filters are shown. Filters track the visible columns: hiding a column removes its filter and reordering columns reorders the filters. Ignored when a :controls slot is given."
+  )
+
+  attr(:on_columns_change, :any,
+    default: nil,
+    doc:
+      "Event name (atom or string) sent to parent when column visibility or order changes. " <>
+        "Parent receives {event_name, %{prefs: %{order: [field], hidden: [field]}, id: string()}}. " <>
+        "Use this to persist preferences server-side instead of (or in addition to) localStorage."
   )
 
   slot :col do
@@ -264,9 +302,38 @@ defmodule Cinder.Collection do
       doc: "Enable sorting (true, false, or unified config [cycle: [nil, :asc, :desc]])"
     )
 
+    attr(:sort_field, :string,
+      doc:
+        "Field to sort by instead of this column's `field`, while filtering and display " <>
+          "stay on `field`. Use when a column displays/filters a string but must sort a " <>
+          "different (e.g. numeric) field, such as field=\"stop.friendly_position\" with " <>
+          "sort_field=\"stop.position\"."
+    )
+
+    attr(:sort_with, :list,
+      doc:
+        "Secondary sort fields applied after this column's sort field, in the same direction. " <>
+          "Use for tiebreakers, e.g. sort_with={[\"stop.inserted\"]} on a position column."
+    )
+
     attr(:search, :boolean, doc: "Enable global search on this column")
     attr(:label, :string, doc: "Custom column label (auto-generated if not provided)")
     attr(:class, :string, doc: "CSS classes for table column (table layout only)")
+
+    attr(:hideable, :boolean,
+      doc:
+        "Whether end users can hide this column via the column-prefs UI. Defaults to true. Set to false for required columns (id, primary identifier, action buttons)."
+    )
+
+    attr(:reorderable, :boolean,
+      doc:
+        "Whether end users can reorder this column via drag. Defaults to true. Set to false to pin a column at its declared position."
+    )
+
+    attr(:default_visible, :boolean,
+      doc:
+        "Whether this column is visible by default. Defaults to true. Set to false to declare a column that ships hidden until the user opts in."
+    )
   end
 
   slot(:item,
@@ -350,6 +417,13 @@ defmodule Cinder.Collection do
   slot(:empty, required: false, doc: "Custom empty state content")
   slot(:error, required: false, doc: "Custom error state content")
 
+  slot(:columns_trigger,
+    required: false,
+    doc:
+      "Custom markup for the column-preferences trigger (rendered in the last action column's header when column_preferences? is on). " <>
+        "Receives %{toggle: js, open?: boolean} via :let — bind toggle to your button's phx-click. Falls back to a themed default button."
+  )
+
   def collection(assigns) do
     assigns =
       assigns
@@ -361,6 +435,11 @@ defmodule Cinder.Collection do
       |> assign_new(:query_opts, fn -> [] end)
       |> assign_new(:on_state_change, fn -> nil end)
       |> assign_new(:on_query_change, fn -> nil end)
+      |> assign_new(:column_preferences?, fn -> false end)
+      |> assign_new(:show_prefs, fn -> false end)
+      |> assign_new(:header_trigger, fn -> true end)
+      |> assign_new(:filter_selector?, fn -> false end)
+      |> assign_new(:on_columns_change, fn -> nil end)
       |> assign_new(:show_pagination, fn -> true end)
       |> assign(:loading_message, assigns[:loading_message] || dgettext("cinder", "Loading..."))
       |> assign(:filters_label, assigns[:filters_label] || dgettext("cinder", "Filters"))
@@ -426,6 +505,7 @@ defmodule Cinder.Collection do
     loading_slot = Map.get(assigns, :loading, [])
     empty_slot = Map.get(assigns, :empty, [])
     error_slot = Map.get(assigns, :error, [])
+    columns_trigger_slot = Map.get(assigns, :columns_trigger, [])
 
     # Resolve theme
     resolved_theme = resolve_theme(assigns.theme)
@@ -454,6 +534,7 @@ defmodule Cinder.Collection do
       |> assign(:loading_slot, loading_slot)
       |> assign(:empty_slot, empty_slot)
       |> assign(:error_slot, error_slot)
+      |> assign(:columns_trigger_slot, columns_trigger_slot)
       |> assign(:row_click, row_click)
       |> assign(:item_click, item_click)
       |> assign(:resolved_theme, resolved_theme)
@@ -487,6 +568,7 @@ defmodule Cinder.Collection do
         loading_slot={@loading_slot}
         empty_slot={@empty_slot}
         error_slot={@error_slot}
+        columns_trigger_slot={@columns_trigger_slot}
         col={@processed_columns}
         query_columns={@query_columns}
         row_click={@row_click}
@@ -501,8 +583,14 @@ defmodule Cinder.Collection do
         pagination_mode={@pagination_mode}
         id_field={@id_field}
         selectable={@selectable}
+        select_on_row_click={@select_on_row_click}
         on_selection_change={@on_selection_change}
         on_query_change={@on_query_change}
+        column_preferences?={@column_preferences?}
+        show_prefs={@show_prefs}
+        header_trigger={@header_trigger}
+        filter_selector?={@filter_selector?}
+        on_columns_change={@on_columns_change}
         bulk_action_slots={@bulk_action_slots}
         sort_mode={@sort_mode}
       />
@@ -536,6 +624,8 @@ defmodule Cinder.Collection do
       base_column_config = %{
         field: field,
         sortable: sort_config.enabled,
+        sort_field: Map.get(slot, :sort_field),
+        sort_with: Map.get(slot, :sort_with, []),
         filterable: filter_attr != false,
         class: Map.get(slot, :class, ""),
         filter_fn: filter_fn,
@@ -605,12 +695,17 @@ defmodule Cinder.Collection do
         filter_type: parsed_column.filter_type,
         filter_options: parsed_column.filter_options,
         sortable: parsed_column.sortable,
+        sort_field: Map.get(parsed_column, :sort_field),
+        sort_with: Map.get(parsed_column, :sort_with, []),
         class: Map.get(slot, :class, ""),
         inner_block: slot[:inner_block] || default_inner_block(field),
         slot: slot,
         filter_fn: parsed_column.filter_fn,
         searchable: parsed_column.searchable,
         sort_cycle: sort_config.cycle || [nil, :asc, :desc],
+        hideable: field != nil && Map.get(slot, :hideable, true),
+        reorderable: field != nil && Map.get(slot, :reorderable, true),
+        default_visible: Map.get(slot, :default_visible, true),
         __slot__: :col
       }
     end)

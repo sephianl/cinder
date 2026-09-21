@@ -138,5 +138,43 @@ defmodule Cinder.Renderers.ListSelectionTest do
       assert html =~ "phx-click"
       assert html =~ "toggle_select"
     end
+
+    test "clicking item does not toggle selection when select_on_row_click=false" do
+      assigns =
+        base_assigns()
+        |> Map.merge(%{
+          selectable: true,
+          select_on_row_click: false,
+          selected_ids: MapSet.new(),
+          id_field: :id,
+          item_click: nil,
+          data: [%{id: "item-1", name: "Item 1"}]
+        })
+
+      html = render_component(&ListRenderer.render/1, assigns)
+
+      # The item wrapper is no longer clickable and carries no row-level push...
+      refute html =~ "cursor-pointer"
+      refute html =~ "push"
+      # ...but the checkbox itself still toggles selection.
+      assert html =~ ~s(phx-click="toggle_select")
+      assert html =~ "test-checkbox-class"
+    end
+
+    test "select_on_row_click=false still highlights selected items" do
+      assigns =
+        base_assigns()
+        |> Map.merge(%{
+          selectable: true,
+          select_on_row_click: false,
+          selected_ids: MapSet.new(["item-1"]),
+          id_field: :id,
+          data: [%{id: "item-1", name: "Item 1"}]
+        })
+
+      html = render_component(&ListRenderer.render/1, assigns)
+
+      assert html =~ "test-selected-item"
+    end
   end
 end
