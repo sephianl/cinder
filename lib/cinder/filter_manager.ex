@@ -53,11 +53,35 @@ defmodule Cinder.FilterManager do
   def render_filter_controls(assigns) do
     controls_slot = Map.get(assigns, :controls_slot, [])
 
-    if controls_slot != [] do
-      render_filter_controls_with_slot(assigns, controls_slot)
-    else
-      render_filter_controls_default(assigns)
+    cond do
+      controls_slot != [] ->
+        render_filter_controls_with_slot(assigns, controls_slot)
+
+      Map.get(assigns, :filter_selector?, false) ->
+        render_filter_controls_selector(assigns)
+
+      true ->
+        render_filter_controls_default(assigns)
     end
+  end
+
+  defp render_filter_controls_selector(assigns) do
+    controls_data = Cinder.Controls.build_controls_data(assigns)
+    has_content = controls_data.filters != [] or controls_data.search != nil
+
+    assigns =
+      assigns
+      |> assign(:controls_data, controls_data)
+      |> assign(:shown_filters, Map.get(assigns, :shown_filters, MapSet.new()))
+      |> assign(:has_content, has_content)
+
+    ~H"""
+    <div :if={@has_content} class={@theme.filter_container_class} data-key="filter_container_class">
+      <form id={"#{@table_id}-filter-form"} phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
+        <Cinder.Controls.render_filter_selector controls={@controls_data} shown={@shown_filters} />
+      </form>
+    </div>
+    """
   end
 
   defp render_filter_controls_with_slot(assigns, controls_slot) do

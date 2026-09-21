@@ -25,7 +25,9 @@ defmodule Cinder.ColumnTest do
     end
 
     test "keeps column class and mask_class separate so the header stays unmasked" do
-      column = Column.parse_column(%{field: "address.name", label: "Receiver", class: "w-1/4"}, nil)
+      column =
+        Column.parse_column(%{field: "address.name", label: "Receiver", class: "w-1/4"}, nil)
+
       assert column.class == "w-1/4"
       assert column.mask_class == "ph-mask"
     end
