@@ -2,32 +2,37 @@
  * Cinder LiveView hooks.
  *
  *   import { createCinderHooks } from "cinder"
- *   import Sortable from "sortablejs" // optional — needed for column drag-to-reorder
+ *   import Sortable from "sortablejs" // optional — needed for drag-to-reorder
  *
  *   const liveSocket = new LiveSocket("/live", Socket, {
  *     hooks: { ...createCinderHooks({ Sortable }) }
  *   })
  *
- * Without `sortablejs`, column visibility and persistence still work; only
+ * Without `sortablejs`, show/hide and persistence still work; only
  * drag-to-reorder is disabled.
  */
 
-const STORAGE_PREFIX = "cinder:column_prefs:";
+const COLUMN_STORAGE_PREFIX = "cinder:column_prefs:";
+const FILTER_STORAGE_PREFIX = "cinder:filter_prefs:";
 
-/** Per-table localStorage I/O for column visibility and order. */
-function createColumnPrefsHook() {
+/**
+ * Per-table localStorage I/O for one preference editor. Columns and filters
+ * each get their own prefix, event and storage entry, so trimming the filter
+ * row never disturbs which columns the table shows.
+ */
+function createPrefsHook({ prefix, changedEvent, applyEvent, label }) {
   return {
     mounted() {
       this.tableId = this.el.dataset.cinderTableId;
-      this.storageKey = STORAGE_PREFIX + this.tableId;
+      this.storageKey = prefix + this.tableId;
 
-      this.handleEvent("cinder:column_prefs_changed", (payload) => {
+      this.handleEvent(changedEvent, (payload) => {
         if (!payload || payload.id !== this.tableId) return;
         this.writePrefs({ order: payload.order, hidden: payload.hidden });
       });
 
       const stored = this.readPrefs() || {};
-      this.pushEventTo(this.el, "apply_column_preferences", stored);
+      this.pushEventTo(this.el, applyEvent, stored);
     },
 
     readPrefs() {
@@ -35,7 +40,7 @@ function createColumnPrefsHook() {
         const raw = window.localStorage.getItem(this.storageKey);
         return raw ? JSON.parse(raw) : null;
       } catch (e) {
-        console.warn("[cinder] failed to read column prefs", e);
+        console.warn(`[cinder] failed to read ${label} prefs`, e);
         return null;
       }
     },
@@ -44,14 +49,14 @@ function createColumnPrefsHook() {
       try {
         window.localStorage.setItem(this.storageKey, JSON.stringify(prefs));
       } catch (e) {
-        console.warn("[cinder] failed to persist column prefs", e);
+        console.warn(`[cinder] failed to persist ${label} prefs`, e);
       }
     },
   };
 }
 
-/** SortableJS binding on the prefs drawer's column list. No-op without Sortable. */
-function createColumnSortableHook(Sortable) {
+/** SortableJS binding on a prefs drawer's list. No-op without Sortable. */
+function createPrefsSortableHook(Sortable, reorderEvent) {
   return {
     mounted() {
       if (!Sortable) return;
@@ -86,7 +91,7 @@ function createColumnSortableHook(Sortable) {
         .map((el) => el.dataset.field)
         .filter(Boolean);
 
-      this.pushEventTo(this.el, "reorder_columns", { order });
+      this.pushEventTo(this.el, reorderEvent, { order });
     },
   };
 }
@@ -94,8 +99,20 @@ function createColumnSortableHook(Sortable) {
 /** Pass `{ Sortable }` to enable drag-to-reorder. */
 export function createCinderHooks({ Sortable } = {}) {
   return {
-    CinderColumnPrefs: createColumnPrefsHook(),
-    CinderColumnSortable: createColumnSortableHook(Sortable),
+    CinderColumnPrefs: createPrefsHook({
+      prefix: COLUMN_STORAGE_PREFIX,
+      changedEvent: "cinder:column_prefs_changed",
+      applyEvent: "apply_column_preferences",
+      label: "column",
+    }),
+    CinderColumnSortable: createPrefsSortableHook(Sortable, "reorder_columns"),
+    CinderFilterPrefs: createPrefsHook({
+      prefix: FILTER_STORAGE_PREFIX,
+      changedEvent: "cinder:filter_prefs_changed",
+      applyEvent: "apply_filter_preferences",
+      label: "filter",
+    }),
+    CinderFilterSortable: createPrefsSortableHook(Sortable, "reorder_filters"),
   };
 }
 

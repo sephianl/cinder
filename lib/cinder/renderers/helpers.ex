@@ -19,6 +19,33 @@ defmodule Cinder.Renderers.Helpers do
   end
 
   @doc """
+  Renders the "filters" glyph used by the filter-preferences trigger.
+
+  A funnel, `fill="currentColor"` so it inherits the surrounding button color —
+  the counterpart to `columns_icon/1` on the filter row.
+  """
+  attr :class, :string, default: "w-4 h-4"
+
+  def filters_icon(assigns) do
+    ~H"""
+    <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class={@class} aria-hidden="true">
+      <path d="M1.5 2.75C1.5 2.336 1.836 2 2.25 2h11.5a.75.75 0 0 1 .575 1.232L9.75 8.69v4.06a.75.75 0 0 1-1.2.6l-2-1.5a.75.75 0 0 1-.3-.6V8.69L1.675 3.232A.75.75 0 0 1 1.5 2.75Z" fill="currentColor" />
+    </svg>
+    """
+  end
+
+  @doc """
+  `invisible` while a table's filter preferences are still in flight.
+
+  The filter row is hidden for the same reason the table is: until the stored
+  preferences arrive from the browser, the row we would paint is the wrong one.
+  """
+  def filter_prefs_hydration_class(%{filter_selector?: true, filter_prefs_hydrated?: false}),
+    do: "invisible"
+
+  def filter_prefs_hydration_class(_assigns), do: ""
+
+  @doc """
   Checks whether a slot assign contains any provided slot content.
   """
   def has_slot?(assigns, key) do

@@ -200,21 +200,27 @@ defmodule Cinder.Controls do
   end
 
   @doc """
-  Renders the optional-filter selector: search, the currently-shown filters, and
-  an "add filter" dropdown listing every available (visible) filter.
+  Renders the editable filter row: search, the filters the operator keeps shown,
+  and the button that opens the "Edit filters" drawer.
 
-  Only filters the operator has added — or that already carry a value — are shown
-  as inputs; the rest live behind the dropdown. Because the controls data is built
-  from the table's *visible* columns, hidden columns' filters never appear and the
-  filter order follows the column order.
+  Shown once a table has more than `Cinder.FilterPreferences.selector_threshold/0`
+  filters — below that the row is short enough to render whole. Every filter
+  starts shown; the drawer is how one gets trimmed or moved. A filter that still
+  carries a value renders even when hidden, so a value arriving from the URL
+  cannot narrow the table invisibly.
+
+  Because the controls data is built from the table's *visible* columns, a hidden
+  column's filter never appears here at all.
 
   ## Attributes
 
   - `controls` — the controls data map from `build_controls_data/1`
-  - `shown` — a `MapSet` of field strings the operator has revealed
+  - `prefs` — the `Cinder.FilterPreferences` map for this table
+  - `drawer_open?` — whether the "Edit filters" drawer is currently open
   """
   attr :controls, :map, required: true
-  attr :shown, :any, required: true
+  attr :prefs, :map, required: true
+  attr :drawer_open?, :boolean, default: false
 
   def render_filter_selector(assigns) do
     assigns =
@@ -222,75 +228,48 @@ defmodule Cinder.Controls do
         assigns,
         :visible,
         Enum.filter(assigns.controls.filters, fn {_key, filter} ->
-          shown?(filter, assigns.shown)
+          shown?(filter, assigns.prefs)
         end)
       )
 
     ~H"""
-    <div class="flex flex-wrap items-end gap-4">
-      <.render_search
-        search={@controls.search}
-        theme={@controls.theme}
-        target={@controls.target}
-      />
+    <div class="flex items-end gap-4">
+      <div class="flex flex-1 flex-wrap items-end gap-4">
+        <.render_search
+          search={@controls.search}
+          theme={@controls.theme}
+          target={@controls.target}
+        />
 
-      <.render_filter
-        :for={{_key, filter} <- @visible}
-        filter={filter}
-        theme={@controls.theme}
-        target={@controls.target}
-        filter_values={@controls.filter_values}
-        raw_filter_params={@controls.raw_filter_params}
-      />
+        <.render_filter
+          :for={{_key, filter} <- @visible}
+          filter={filter}
+          theme={@controls.theme}
+          target={@controls.target}
+          filter_values={@controls.filter_values}
+          raw_filter_params={@controls.raw_filter_params}
+        />
+      </div>
 
-      <details :if={@controls.filters != []} class="relative self-center">
-        <summary
-          class={[@controls.theme.column_prefs_button_class, "list-none cursor-pointer"]}
-          data-key="column_prefs_button_class"
-        >
-          {@controls.filters_label}
-        </summary>
-        <ul class="absolute right-0 z-10 mt-1 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-          <li :for={{_key, filter} <- @controls.filters}>
-            <% active = shown?(filter, @shown) %>
-            <button
-              type="button"
-              phx-click={toggle(filter, @shown, @controls.target)}
-              data-field={filter.field}
-              aria-pressed={to_string(active)}
-              class={[
-                "flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm",
-                active && "bg-blue-50 font-medium text-blue-900 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-100 dark:hover:bg-blue-900/60",
-                !active && "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-              ]}
-            >
-              <span class={[
-                "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                active && "border-blue-600 bg-blue-600 text-white dark:border-blue-500 dark:bg-blue-500",
-                !active && "border-gray-300 dark:border-gray-600"
-              ]}>
-                <span :if={active} class="hero-check h-3 w-3" />
-              </span>
-              {filter.label}
-            </button>
-          </li>
-        </ul>
-      </details>
+      <button
+        type="button"
+        phx-click="toggle_filter_prefs_drawer"
+        phx-target={@controls.target}
+        class={@controls.theme.filter_prefs_button_class}
+        data-key="filter_prefs_button_class"
+        aria-haspopup="dialog"
+        aria-expanded={to_string(@drawer_open?)}
+      >
+        <Cinder.Renderers.Helpers.filters_icon class={@controls.theme.filter_prefs_button_icon_class} />
+        {@controls.filters_label}
+      </button>
     </div>
     """
   end
 
-  # Removing clears the value at Cinder first (so a hidden filter never keeps
-  # filtering invisibly), then drops it from the shown set.
-  defp toggle(filter, shown, target) do
-    if shown?(filter, shown) do
-      JS.push("remove_filter", value: %{"field" => filter.field}, target: target)
-    else
-      JS.push("add_filter", value: %{"field" => filter.field}, target: target)
-    end
+  defp shown?(filter, prefs) do
+    not Cinder.FilterPreferences.hidden?(prefs, filter.field) or active?(filter)
   end
-
-  defp shown?(filter, shown), do: MapSet.member?(shown, filter.field) or active?(filter)
 
   defp active?(%{value: value}), do: value not in [nil, "", []]
 
