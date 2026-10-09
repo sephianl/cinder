@@ -14,6 +14,7 @@ defmodule Cinder.FilterPreferencesLiveComponentTest do
       hideable: true,
       reorderable: true,
       default_visible: true,
+      filter_default_visible: Keyword.get(opts, :filter_default_visible, true),
       filterable: Keyword.get(opts, :filterable, true),
       sortable: false,
       class: ""
@@ -60,20 +61,53 @@ defmodule Cinder.FilterPreferencesLiveComponentTest do
     test "three filters leave the row as declared" do
       socket = derive(make_socket(columns: [col("a"), col("b"), col("c")]))
 
-      refute socket.assigns.filter_selector?
+      refute socket.assigns.filter_editable?
     end
 
     test "four filters turn the editor on" do
       socket = derive(make_socket(columns: four_filters()))
 
-      assert socket.assigns.filter_selector?
+      assert socket.assigns.filter_editable?
     end
 
     test "non-filterable columns don't count towards the threshold" do
       columns = [col("a"), col("b"), col("c"), col("d", filterable: false)]
       socket = derive(make_socket(columns: columns))
 
-      refute socket.assigns.filter_selector?
+      refute socket.assigns.filter_editable?
+    end
+  end
+
+  describe "filters that ship hidden" do
+    test "a short row with one is editable, and that filter starts out of the row" do
+      columns = [col("a"), col("b"), col("c", filter_default_visible: false)]
+
+      socket =
+        derive(
+          make_socket(
+            columns: columns,
+            filter_preferences: FilterPreferences.from_columns(columns)
+          )
+        )
+
+      assert socket.assigns.filter_editable?
+      assert FilterPreferences.hidden?(socket.assigns.filter_preferences, "c")
+      # Still in the drawer's list, so it can be added.
+      assert Enum.map(socket.assigns.filter_prefs_drawer_columns, & &1.field) == ["a", "b", "c"]
+    end
+
+    test "reset restores the declared defaults, not everything-shown" do
+      columns = [col("a"), col("b"), col("c", filter_default_visible: false)]
+
+      socket =
+        make_socket(
+          columns: columns,
+          filter_preferences: %{order: nil, hidden: MapSet.new()}
+        )
+
+      {:noreply, socket} = LiveComponent.handle_event("reset_filter_preferences", %{}, socket)
+
+      assert FilterPreferences.hidden?(socket.assigns.filter_preferences, "c")
     end
   end
 

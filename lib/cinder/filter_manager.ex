@@ -52,20 +52,16 @@ defmodule Cinder.FilterManager do
   """
   def render_filter_controls(assigns) do
     controls_slot = Map.get(assigns, :controls_slot, [])
+    collapsible = Map.get(assigns, :filter_mode, true) in [:toggle, :toggle_open]
 
     cond do
-      controls_slot != [] ->
-        render_filter_controls_with_slot(assigns, controls_slot)
-
-      Map.get(assigns, :filter_selector?, false) ->
-        render_filter_controls_selector(assigns)
-
-      true ->
-        render_filter_controls_default(assigns)
+      controls_slot != [] -> render_filter_controls_with_slot(assigns, controls_slot)
+      collapsible -> render_filter_controls_collapsible(assigns)
+      true -> render_filter_controls_row(assigns)
     end
   end
 
-  defp render_filter_controls_selector(assigns) do
+  defp render_filter_controls_row(assigns) do
     controls_data = Cinder.Controls.build_controls_data(assigns)
     has_content = controls_data.filters != [] or controls_data.search != nil
 
@@ -73,15 +69,17 @@ defmodule Cinder.FilterManager do
       assigns
       |> assign(:controls_data, controls_data)
       |> assign(:filter_prefs, Map.get(assigns, :filter_prefs, Cinder.FilterPreferences.empty()))
+      |> assign(:filter_editable?, Map.get(assigns, :filter_editable?, false))
       |> assign(:filter_prefs_drawer_open?, Map.get(assigns, :filter_prefs_drawer_open?, false))
       |> assign(:has_content, has_content)
 
     ~H"""
     <div :if={@has_content} class={@theme.filter_container_class} data-key="filter_container_class">
       <form id={"#{@table_id}-filter-form"} phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
-        <Cinder.Controls.render_filter_selector
+        <Cinder.Controls.render_filter_row
           controls={@controls_data}
           prefs={@filter_prefs}
+          editable?={@filter_editable?}
           drawer_open?={@filter_prefs_drawer_open?}
         />
       </form>
@@ -108,7 +106,7 @@ defmodule Cinder.FilterManager do
     """
   end
 
-  defp render_filter_controls_default(assigns) do
+  defp render_filter_controls_collapsible(assigns) do
     controls_data = Cinder.Controls.build_controls_data(assigns)
     has_content = controls_data.filters != [] or controls_data.search != nil
     filter_mode = Map.get(assigns, :filter_mode, true)

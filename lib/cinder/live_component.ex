@@ -393,7 +393,10 @@ defmodule Cinder.LiveComponent do
 
   @impl true
   def handle_event("reset_filter_preferences", _params, socket) do
-    {:noreply, update_filter_prefs(socket, fn _prefs -> Cinder.FilterPreferences.empty() end)}
+    {:noreply,
+     update_filter_prefs(socket, fn _prefs ->
+       Cinder.FilterPreferences.from_columns(socket.assigns.filter_prefs_columns)
+     end)}
   end
 
   @impl true
@@ -1053,17 +1056,23 @@ defmodule Cinder.LiveComponent do
     |> assign_new(:column_prefs_drawer_open?, fn -> false end)
     |> assign_new(:column_prefs_hydrated?, fn -> not prefs_on? end)
     |> assign_new(:prefs_hydrate_scheduled?, fn -> false end)
-    |> assign_filter_prefs_defaults()
+    |> assign_filter_prefs_defaults(assigns)
   end
 
-  # Filter preferences need no opt-in: `assign_column_definitions/1` turns the
-  # editor on once the row has more filters than it is worth showing whole, so
-  # the only thing to seed here is the state it edits. `filter_prefs_hydrated?`
-  # starts false and is resolved there too — a table below the threshold has
-  # nothing to hydrate and is never gated.
-  defp assign_filter_prefs_defaults(socket) do
+  # Filter preferences need no opt-in: `assign_column_definitions/1` decides
+  # whether the row earns an editor, so the only thing to seed here is the state
+  # it edits — filters declared `filter_default_visible: false` start hidden.
+  # `filter_prefs_hydrated?` starts false and is resolved there too: a row with
+  # no editor has nothing to hydrate and is never gated.
+  defp assign_filter_prefs_defaults(socket, assigns) do
+    declared =
+      Enum.filter(
+        assigns[:query_columns] || assigns[:col] || [],
+        &Map.get(&1, :filterable, false)
+      )
+
     socket
-    |> assign_new(:filter_preferences, fn -> Cinder.FilterPreferences.empty() end)
+    |> assign_new(:filter_preferences, fn -> Cinder.FilterPreferences.from_columns(declared) end)
     |> assign_new(:filter_prefs_drawer_open?, fn -> false end)
     |> assign_new(:filter_prefs_hydrated?, fn -> false end)
   end
@@ -1120,7 +1129,7 @@ defmodule Cinder.LiveComponent do
 
   defp prefs_hydration_pending?(%{assigns: assigns}) do
     (assigns[:column_preferences?] && not assigns[:column_prefs_hydrated?]) ||
-      (assigns[:filter_selector?] && not assigns[:filter_prefs_hydrated?])
+      (assigns[:filter_editable?] && not assigns[:filter_prefs_hydrated?])
   end
 
   defp schedule_force_hydrate_when_connected(socket) do
@@ -1155,18 +1164,18 @@ defmodule Cinder.LiveComponent do
     |> assign(:filter_field_names, filterable_field_names(query))
   end
 
-  # A long filter row becomes editable; a short one stays as declared. Both the
-  # row and the drawer work from the same ordered list, so dragging a filter in
-  # the drawer moves it in the row — independently of the column order.
+  # Every table gets the same row; a row with something worth editing also gets
+  # the editor. Row and drawer work from one ordered list, so dragging a filter
+  # in the drawer moves it in the row — independently of the column order.
   defp assign_filter_definitions(socket, filter_cols) do
-    selector? = Cinder.FilterPreferences.selector?(filter_cols)
+    editable? = Cinder.FilterPreferences.editable?(filter_cols)
     prefs = socket.assigns.filter_preferences
 
     ordered =
-      if selector?, do: Cinder.FilterPreferences.order(filter_cols, prefs), else: filter_cols
+      if editable?, do: Cinder.FilterPreferences.order(filter_cols, prefs), else: filter_cols
 
     socket
-    |> assign(:filter_selector?, selector?)
+    |> assign(:filter_editable?, editable?)
     |> assign(:filter_columns, ordered)
     |> assign(:filter_prefs_columns, filter_cols)
     |> assign(:filter_prefs_drawer_columns, ordered)

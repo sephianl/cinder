@@ -59,7 +59,7 @@ defmodule Cinder.Renderers.Grid do
           search_placeholder={@search_placeholder}
           raw_filter_params={Map.get(assigns, :raw_filter_params, %{})}
           controls_slot={Map.get(assigns, :controls_slot, [])}
-          filter_selector?={Map.get(assigns, :filter_selector?, false)}
+          filter_editable?={Map.get(assigns, :filter_editable?, false)}
           filter_prefs={Map.get(assigns, :filter_preferences, Cinder.FilterPreferences.empty())}
           filter_prefs_drawer_open?={Map.get(assigns, :filter_prefs_drawer_open?, false)}
         />
@@ -81,7 +81,7 @@ defmodule Cinder.Renderers.Grid do
         id={@id}
         myself={@myself}
         theme={@theme}
-        enabled={Map.get(assigns, :filter_selector?, false)}
+        enabled={Map.get(assigns, :filter_editable?, false)}
         open?={Map.get(assigns, :filter_prefs_drawer_open?, false)}
         drawer_filters={Map.get(assigns, :filter_prefs_drawer_columns, [])}
         prefs={Map.get(assigns, :filter_preferences, Cinder.FilterPreferences.empty())}

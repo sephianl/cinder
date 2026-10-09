@@ -4,12 +4,17 @@
 
 ### Features
 
+* **One filter row for every table.** The filter header is gone: no title above the inputs, no "n active" badge. Every table renders the same row — search, the filters, the reset — and the "Edit filters" trigger joins it when the row has something worth editing. Hosts that wrote a `:controls` slot purely to be rid of the title can delete it. `show_filters: :toggle`/`:toggle_open` still render a header, since a collapsible row needs something to click.
+* New per-filter option `filter_default_visible: false` on the `:col` and `:filter` slots: ships that filter in the "Edit filters" drawer instead of the row, for a table that wants a short row without putting its other filters out of reach. A row carrying one is always editable, whatever its length, so a hidden filter is never unreachable.
 * The filter row is now editable, the way the column list is: a collection declaring more than three filters (search excluded) gets a "Filters" button that opens an "Edit filters" drawer — checkboxes to take a filter out of the row, drag handles to reorder it. Preferences persist to `localStorage` under `cinder:filter_prefs:<table id>`, separately from column preferences. No opt-in; a `:controls` slot still takes precedence. Requires the new `CinderFilterPrefs` and `CinderFilterSortable` hooks, which `createCinderHooks/1` returns alongside the column pair. See [Filter Preferences](docs/advanced.md#filter-preferences).
 * The editable filter row now carries the same "Reset filters" button the default layout gets through `Cinder.Controls.render_header/1`, so a table no longer loses it by crossing the filter threshold. It clears filter values; search keeps its own clear, and which filters are shown is the drawer's "Reset to defaults".
 * New theme properties `filter_prefs_container_class`, `filter_prefs_button_class` and `filter_prefs_button_icon_class` for the filter editor's container and trigger. The drawer itself reuses the `column_prefs_*` properties, so the two editors cannot drift apart.
 
 ### Breaking changes
 
+* `Cinder.Controls.render_filter_selector/1` is now `render_filter_row/1` and takes an `editable?` attribute — it renders every table's row, not only an editable one.
+* The `filter_selector?` assign is now `filter_editable?`, and `Cinder.FilterPreferences.selector?/1` is `editable?/1`.
+* `Cinder.FilterPreferences.from_payload/2` and the `reset_filter_preferences` event now fall back to the declared defaults (`from_columns/1`) rather than everything-shown, so `filter_default_visible: false` survives a reset.
 * Removed the `sort_asc_icon`, `sort_desc_icon`, and `sort_icon_class` theme properties — list and grid layouts now render the same Heroicon sort indicators as the table (configured via `sort_*_icon_name`/`sort_*_icon_class`). See the [upgrading guide](docs/upgrading.md) for details.
 * Removed the `filter_selector?` attribute: Cinder now decides for itself when the filter row needs an editor. Drop it from your `Cinder.collection` calls — the behaviour it enabled is on by default above the filter threshold. The `add_filter` and `remove_filter` events and the `shown_filters` assign it used are gone with it, replaced by `toggle_filter_visibility`, `reorder_filters`, `reset_filter_preferences`, `apply_filter_preferences` and `toggle_filter_prefs_drawer`.
 

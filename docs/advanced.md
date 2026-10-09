@@ -582,7 +582,9 @@ end
 
 ## Filter Preferences
 
-The filter row is editable the same way the column list is, and entirely separately. No opt-in: once a collection declares **more than three filters** (search does not count), Cinder adds a "Filters" button to the row that opens an "Edit filters" drawer — checkboxes to take a filter out of the row, drag handles to reorder it.
+Every table renders the same filter row — search, the filters, a "Reset filters" button — with no title above it and no "n active" badge. The row is editable the same way the column list is, and entirely separately: when there is something worth editing, Cinder adds a "Filters" button that opens an "Edit filters" drawer — checkboxes to take a filter out of the row, drag handles to reorder it.
+
+A row earns that button when it declares **more than three filters** (search does not count), **or** when any filter ships hidden (see below). No opt-in either way.
 
 ```heex
 <Cinder.collection resource={MyApp.User} actor={@current_user} id="users-table">
@@ -606,7 +608,21 @@ Behaviour worth knowing:
 - **Preferences persist to `localStorage`** under `cinder:filter_prefs:<table id>`, separate from `cinder:column_prefs:<table id>`. Both come from the same [JavaScript hook setup](#javascript-hook-setup); `createCinderHooks/1` returns `CinderFilterPrefs` and `CinderFilterSortable` alongside the column pair.
 - **The drawer is styled by the `column_prefs_*` theme keys**, shared with the column editor so the two always match. Only its container and trigger have keys of their own: `filter_prefs_container_class`, `filter_prefs_button_class` and `filter_prefs_button_icon_class`.
 
-A `:controls` slot takes precedence: a collection that lays out its own filter controls keeps doing exactly that, with no button and no drawer.
+### Starting with a short row
+
+A table with many filters can open with only some of them, leaving the rest in the drawer:
+
+```heex
+<:col :let={o} field="state" filter={:select}>{o.state}</:col>
+<:col :let={o} field="customer.name" filter filter_default_visible={false}>{o.customer.name}</:col>
+<:col :let={o} field="created_at" filter={:date_range} filter_default_visible={false}>{o.created_at}</:col>
+```
+
+The row opens with `state`; the other two wait in the drawer with their checkboxes clear. Because a row carrying a hidden filter is always editable, the button is there to reach them however short the row is. "Reset to defaults" restores this declared set, not everything-shown. `filter_default_visible` is independent of `default_visible`, which is about the column.
+
+### Laying out your own controls
+
+A `:controls` slot takes precedence over all of it: a collection that lays out its own filter controls keeps doing exactly that, with no row, no reset and no drawer of Cinder's — place `Cinder.Controls.render_clear_all/1` in the slot if you want the reset. Before reaching for a slot, check whether you are only trying to lose the title: the standard row has none, so a slot written for that reason is pure cost.
 
 ## Selection & Bulk Actions
 

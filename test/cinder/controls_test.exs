@@ -342,12 +342,15 @@ defmodule Cinder.ControlsTest do
   # ============================================================================
 
   describe "FilterManager.render_filter_controls with controls_slot" do
-    test "renders default UI when no controls_slot provided" do
+    test "renders the standard filter row when no controls_slot provided" do
       html = render_component(&FilterManager.render_filter_controls/1, base_assigns())
 
-      assert html =~ "filter_header_class"
-      assert html =~ "filter_inputs_class"
-      assert html =~ "Filters"
+      assert html =~ ~s(data-key="filter_container_class")
+      assert html =~ ~s(data-key="filter_input_wrapper_class")
+      assert html =~ ~s(phx-click="clear_all_filters")
+      # No header: the row carries no title, and no "n active" count.
+      refute html =~ "filter_header_class"
+      refute html =~ "filter_count_class"
     end
 
     test "renders slot content in form wrapper, replacing default UI" do
@@ -440,12 +443,12 @@ defmodule Cinder.ControlsTest do
       }
 
       html = render_component(&Cinder.collection/1, assigns)
-      assert html =~ "filter_header_class"
+      assert html =~ ~s(data-key="filter_container_class")
 
-      # With slot: custom content, no default UI
+      # With slot: custom content, no row of Cinder's own
       html = render_component(&Cinder.collection/1, Map.put(assigns, :controls, controls_slot))
       assert html =~ "CONTROLS_SLOT:1"
-      refute html =~ "filter_header_class"
+      refute html =~ ~s(data-key="filter_input_wrapper_class")
     end
 
     test "controls slot receives search and filter-only slot data" do
@@ -480,7 +483,7 @@ defmodule Cinder.ControlsTest do
     end
   end
 
-  describe "render_filter_selector/1" do
+  describe "render_filter_row/1" do
     defp selector_filter(field, value \\ "") do
       {String.to_atom(field),
        %{
@@ -494,7 +497,7 @@ defmodule Cinder.ControlsTest do
        }}
     end
 
-    defp render_selector(filters, prefs, drawer_open? \\ false) do
+    defp render_selector(filters, prefs, drawer_open? \\ false, editable? \\ true) do
       controls = %{
         filters: filters,
         search: nil,
@@ -506,9 +509,10 @@ defmodule Cinder.ControlsTest do
         active_filter_count: Enum.count(filters, fn {_key, f} -> f.value not in [nil, "", []] end)
       }
 
-      render_component(&Controls.render_filter_selector/1, %{
+      render_component(&Controls.render_filter_row/1, %{
         controls: controls,
         prefs: prefs,
+        editable?: editable?,
         drawer_open?: drawer_open?
       })
     end
@@ -537,6 +541,13 @@ defmodule Cinder.ControlsTest do
 
       html = render_selector([selector_filter("name", "set")], FilterPreferences.empty())
       refute reset_button(html) =~ "invisible"
+    end
+
+    test "a row with nothing worth editing gets no trigger" do
+      html = render_selector([selector_filter("name")], FilterPreferences.empty(), false, false)
+
+      assert html =~ ~s(id="t-filter-name")
+      refute html =~ ~s(phx-click="toggle_filter_prefs_drawer")
     end
 
     defp reset_button(html) do
