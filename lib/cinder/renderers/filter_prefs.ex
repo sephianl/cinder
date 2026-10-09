@@ -6,7 +6,7 @@ defmodule Cinder.Renderers.FilterPrefs do
   Mounted by the table/list/grid renderers once a table has enough filters to
   be worth trimming (`Cinder.FilterPreferences.selector?/1`). The button that
   opens it lives in the filter row itself —
-  `Cinder.Controls.render_filter_selector/1` — so it sits with the controls it
+  `Cinder.Controls.render_filter_row/1` — so it sits with the controls it
   edits rather than with the table chrome.
 
   The drawer is `Cinder.Renderers.PrefsDrawer`, shared with the column editor;
