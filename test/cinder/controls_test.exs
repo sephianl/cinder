@@ -502,7 +502,8 @@ defmodule Cinder.ControlsTest do
         target: nil,
         filters_label: "Filters",
         filter_values: %{},
-        raw_filter_params: %{}
+        raw_filter_params: %{},
+        active_filter_count: Enum.count(filters, fn {_key, f} -> f.value not in [nil, "", []] end)
       }
 
       render_component(&Controls.render_filter_selector/1, %{
@@ -524,6 +525,23 @@ defmodule Cinder.ControlsTest do
       assert html =~ ~s(phx-click="toggle_filter_prefs_drawer")
       assert html =~ "Filters"
       assert html =~ ~s(aria-expanded="false")
+    end
+
+    test "carries the same Reset filters button the default layout gets" do
+      html = render_selector([selector_filter("name")], FilterPreferences.empty())
+
+      assert html =~ "Reset filters"
+      # Hidden while nothing is set, so the row does not offer to undo nothing.
+      # Match the button's own tag — every filter has its own `invisible` × too.
+      assert reset_button(html) =~ "invisible"
+
+      html = render_selector([selector_filter("name", "set")], FilterPreferences.empty())
+      refute reset_button(html) =~ "invisible"
+    end
+
+    defp reset_button(html) do
+      [tag] = Regex.run(~r/<button[^>]*phx-click="clear_all_filters"[^>]*>/, html)
+      tag
     end
 
     test "the trigger announces an open drawer" do

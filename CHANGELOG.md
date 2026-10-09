@@ -5,6 +5,7 @@
 ### Features
 
 * The filter row is now editable, the way the column list is: a collection declaring more than three filters (search excluded) gets a "Filters" button that opens an "Edit filters" drawer — checkboxes to take a filter out of the row, drag handles to reorder it. Preferences persist to `localStorage` under `cinder:filter_prefs:<table id>`, separately from column preferences. No opt-in; a `:controls` slot still takes precedence. Requires the new `CinderFilterPrefs` and `CinderFilterSortable` hooks, which `createCinderHooks/1` returns alongside the column pair. See [Filter Preferences](docs/advanced.md#filter-preferences).
+* The editable filter row now carries the same "Reset filters" button the default layout gets through `Cinder.Controls.render_header/1`, so a table no longer loses it by crossing the filter threshold. It clears filter values; search keeps its own clear, and which filters are shown is the drawer's "Reset to defaults".
 * New theme properties `filter_prefs_container_class`, `filter_prefs_button_class` and `filter_prefs_button_icon_class` for the filter editor's container and trigger. The drawer itself reuses the `column_prefs_*` properties, so the two editors cannot drift apart.
 
 ### Breaking changes
