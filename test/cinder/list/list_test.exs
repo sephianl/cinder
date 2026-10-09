@@ -241,19 +241,28 @@ defmodule Cinder.ListTest do
       assert html =~ "Please wait..."
     end
 
-    test "filters_label attribute customizes filter section label" do
+    # The filter row carries no title; `filters_label` labels the "Edit filters"
+    # trigger, which a row only earns once it has something worth editing.
+    test "filters_label attribute labels the filter editor trigger" do
       assigns = %{
         resource: TestUser,
         actor: nil,
         layout: :list,
         filters_label: "Search Options",
-        col: [%{field: "name", filter: true, __slot__: :col}],
+        # Three filters is under the threshold, but one shipping hidden is itself
+        # something worth editing, so the row earns its trigger.
+        col: [
+          %{field: "name", filter: true, __slot__: :col},
+          %{field: "email", filter: true, __slot__: :col},
+          %{field: "status", filter: true, filter_default_visible: false, __slot__: :col}
+        ],
         item: item_slot()
       }
 
       html = render_component(&Cinder.collection/1, assigns)
 
       assert html =~ "Search Options"
+      assert html =~ ~s(phx-click="toggle_filter_prefs_drawer")
     end
   end
 

@@ -3,7 +3,13 @@ defmodule Cinder.FilterPreferencesTest do
 
   alias Cinder.FilterPreferences
 
-  defp col(field), do: %{field: field, label: String.capitalize(field)}
+  defp col(field, opts \\ []) do
+    %{
+      field: field,
+      label: String.capitalize(field),
+      filter_default_visible: Keyword.get(opts, :filter_default_visible, true)
+    }
+  end
 
   defp cols(fields), do: Enum.map(fields, &col/1)
 
@@ -13,14 +19,36 @@ defmodule Cinder.FilterPreferencesTest do
     end
   end
 
-  describe "selector?/1" do
+  describe "from_columns/1" do
+    test "everything shown when nothing declares otherwise" do
+      assert FilterPreferences.from_columns(cols(["a", "b"])) == FilterPreferences.empty()
+    end
+
+    test "a filter declared filter_default_visible: false starts hidden" do
+      columns = [col("a"), col("b", filter_default_visible: false)]
+
+      prefs = FilterPreferences.from_columns(columns)
+
+      refute FilterPreferences.hidden?(prefs, "a")
+      assert FilterPreferences.hidden?(prefs, "b")
+    end
+  end
+
+  describe "editable?/1" do
     test "is false up to the threshold and true beyond it" do
-      refute FilterPreferences.selector?(cols(["a", "b", "c"]))
-      assert FilterPreferences.selector?(cols(["a", "b", "c", "d"]))
+      refute FilterPreferences.editable?(cols(["a", "b", "c"]))
+      assert FilterPreferences.editable?(cols(["a", "b", "c", "d"]))
     end
 
     test "an empty filter list never turns the editor on" do
-      refute FilterPreferences.selector?([])
+      refute FilterPreferences.editable?([])
+    end
+
+    # Otherwise a filter shipped hidden on a short row would be unreachable.
+    test "a short row with a hidden filter is still editable" do
+      columns = [col("a"), col("b", filter_default_visible: false)]
+
+      assert FilterPreferences.editable?(columns)
     end
   end
 
@@ -111,11 +139,30 @@ defmodule Cinder.FilterPreferencesTest do
       assert restored == prefs
     end
 
-    test "nil and junk payloads fall back to the defaults" do
-      columns = cols(["a"])
+    test "nil and junk payloads fall back to the declared defaults" do
+      columns = [col("a"), col("b", filter_default_visible: false)]
+      declared = FilterPreferences.from_columns(columns)
 
-      assert FilterPreferences.from_payload(nil, columns) == FilterPreferences.empty()
-      assert FilterPreferences.from_payload("junk", columns) == FilterPreferences.empty()
+      assert FilterPreferences.from_payload(nil, columns) == declared
+      assert FilterPreferences.from_payload("junk", columns) == declared
+    end
+
+    test "a stored hidden list wins over the declared defaults" do
+      # The user revealed the filter the page ships hidden; that choice sticks.
+      columns = [col("a"), col("b", filter_default_visible: false)]
+
+      prefs = FilterPreferences.from_payload(%{"hidden" => []}, columns)
+
+      refute FilterPreferences.hidden?(prefs, "b")
+    end
+
+    test "a payload with no hidden key keeps the declared defaults" do
+      columns = [col("a"), col("b", filter_default_visible: false)]
+
+      prefs = FilterPreferences.from_payload(%{"order" => ["b", "a"]}, columns)
+
+      assert FilterPreferences.hidden?(prefs, "b")
+      assert prefs.order == ["b", "a"]
     end
 
     test "fields that no longer exist are dropped from a stored payload" do
