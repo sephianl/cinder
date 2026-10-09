@@ -332,6 +332,11 @@ defmodule Cinder.Collection do
       doc:
         "Whether this column is visible by default. Defaults to true. Set to false to declare a column that ships hidden until the user opts in."
     )
+
+    attr(:filter_default_visible, :boolean,
+      doc:
+        "Whether this column's *filter* starts in the filter row. Defaults to true. Set to false to declare a filter that ships in the \"Edit filters\" drawer instead, for the user to add when they want it. Independent of `default_visible`, which is about the column."
+    )
   end
 
   slot(:item,
@@ -364,6 +369,11 @@ defmodule Cinder.Collection do
     attr(:min, :any, doc: "Minimum value for range filters")
     attr(:max, :any, doc: "Maximum value for range filters")
     attr(:fn, :fun, doc: "Custom filter function (fn query, filter_config -> query)")
+
+    attr(:filter_default_visible, :boolean,
+      doc:
+        "Whether this filter starts in the filter row. Defaults to true. Set to false to ship it in the \"Edit filters\" drawer instead."
+    )
   end
 
   slot :bulk_action do
@@ -702,6 +712,7 @@ defmodule Cinder.Collection do
         hideable: field != nil && Map.get(slot, :hideable, true),
         reorderable: field != nil && Map.get(slot, :reorderable, true),
         default_visible: Map.get(slot, :default_visible, true),
+        filter_default_visible: Map.get(slot, :filter_default_visible, true),
         __slot__: :col
       }
     end)
@@ -805,6 +816,7 @@ defmodule Cinder.Collection do
         filter_fn: parsed_column.filter_fn,
         searchable: false,
         sort_cycle: [nil, :asc, :desc],
+        filter_default_visible: Map.get(slot, :filter_default_visible, true),
         __slot__: :filter
       }
     end)

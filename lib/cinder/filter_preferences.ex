@@ -7,16 +7,16 @@ defmodule Cinder.FilterPreferences do
   over the *filterable* fields, with their own storage key and their own drawer.
   Changing which columns the table shows does not touch this map.
 
-  Two things differ from `Cinder.ColumnPreferences`:
+  One thing differs from `Cinder.ColumnPreferences`: **nothing is pinned.** Every
+  filter can be hidden and reordered, so there is no pinned/hideable distinction
+  to honour.
 
-    * **Everything starts shown.** A table's filters are all in the row until
-      the operator trims them, so `hidden` starts empty rather than being seeded
-      from the column declarations.
-    * **Nothing is pinned.** Every filter can be hidden and reordered, so there
-      is no pinned/hideable distinction to honour.
+  Filters start shown unless a column declares `filter_default_visible: false`,
+  which ships that filter in the drawer instead — for a table that wants a short
+  row by default without putting its other filters out of reach.
 
-  The row only becomes editable once it is long enough to be worth trimming —
-  more than three filters, search excluded. See `selector?/1`.
+  The row becomes editable once there is something worth editing: more than three
+  filters (search excluded), or any filter that ships hidden. See `editable?/1`.
   """
 
   @type field :: String.t()
@@ -26,29 +26,43 @@ defmodule Cinder.FilterPreferences do
   # whole: no edit button, no drawer, nothing to persist.
   @selector_threshold 3
 
-  @doc "Empty/default preferences — every filter shown, in column order."
+  @doc "Empty preferences — every filter shown, in column order."
   @spec empty() :: t()
   def empty, do: %{order: nil, hidden: MapSet.new()}
 
-  @doc "The filter count above which the row becomes editable."
+  @spec from_columns([map()]) :: t()
+  def from_columns(filterable_columns) do
+    hidden =
+      filterable_columns
+      |> Enum.filter(&(Map.get(&1, :filter_default_visible, true) == false))
+      |> Enum.map(& &1.field)
+      |> MapSet.new()
+
+    %{order: nil, hidden: hidden}
+  end
+
+  @doc "The filter count above which the row becomes editable on length alone."
   @spec selector_threshold() :: pos_integer()
   def selector_threshold, do: @selector_threshold
 
   @doc """
-  Whether `filterable_columns` is long enough to hand its editing to the drawer.
+  Whether the row has something worth editing, and so earns its button.
 
-  Search is not a filterable column, so it never counts towards the threshold.
+  True when there are more filters than the threshold — search is not a
+  filterable column, so it never counts — or when any filter ships hidden, since
+  the drawer is the only way to reach one of those.
   """
-  @spec selector?([map()]) :: boolean()
-  def selector?(filterable_columns) when is_list(filterable_columns) do
-    length(filterable_columns) > @selector_threshold
+  @spec editable?([map()]) :: boolean()
+  def editable?(filterable_columns) when is_list(filterable_columns) do
+    length(filterable_columns) > @selector_threshold or
+      Enum.any?(filterable_columns, &(Map.get(&1, :filter_default_visible, true) == false))
   end
 
   @doc """
   Returns `columns` in the operator's preferred order.
 
   Nothing is removed: a hidden filter still needs its value built so the row can
-  show it anyway when it carries one (see `Cinder.Controls.render_filter_selector/1`).
+  show it anyway when it carries one (see `Cinder.Controls.render_filter_row/1`).
   Fields the preferences don't mention — a newly declared filter — keep their
   declared order at the end.
   """
@@ -115,26 +129,30 @@ defmodule Cinder.FilterPreferences do
   @doc """
   Builds preferences from a client-supplied payload, validating against `columns`.
 
-  Unknown fields are dropped from both `order` and `hidden`.
+  Unknown fields are dropped from both `order` and `hidden`. A payload with no
+  `hidden` key falls back to the declared defaults; one that carries a `hidden`
+  list replaces them, so a user who reveals a filter that ships hidden keeps it.
   """
   @spec from_payload(map() | nil, [map()]) :: t()
-  def from_payload(nil, _columns), do: empty()
+  def from_payload(nil, columns), do: from_columns(columns)
 
   def from_payload(payload, columns) when is_map(payload) do
     raw_order = Map.get(payload, "order") || Map.get(payload, :order)
-    raw_hidden = Map.get(payload, "hidden") || Map.get(payload, :hidden) || []
+    raw_hidden = Map.get(payload, "hidden") || Map.get(payload, :hidden)
 
-    hidden =
-      raw_hidden
-      |> Enum.filter(&known?(&1, columns))
-      |> MapSet.new()
+    base = from_columns(columns)
 
-    prefs = %{empty() | hidden: hidden}
+    base =
+      if is_list(raw_hidden) do
+        %{base | hidden: raw_hidden |> Enum.filter(&known?(&1, columns)) |> MapSet.new()}
+      else
+        base
+      end
 
-    if is_list(raw_order), do: set_order(prefs, raw_order, columns), else: prefs
+    if is_list(raw_order), do: set_order(base, raw_order, columns), else: base
   end
 
-  def from_payload(_payload, _columns), do: empty()
+  def from_payload(_payload, columns), do: from_columns(columns)
 
   defp known?(field, columns), do: Enum.any?(columns, &(&1.field == field))
 end

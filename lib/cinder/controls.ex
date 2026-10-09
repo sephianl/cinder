@@ -200,14 +200,16 @@ defmodule Cinder.Controls do
   end
 
   @doc """
-  Renders the editable filter row: search, the filters the operator keeps shown,
-  and the button that opens the "Edit filters" drawer.
+  Renders a table's filter row: search, the filters shown, the reset, and — when
+  the row has something worth editing — the button that opens the "Edit filters"
+  drawer.
 
-  Shown once a table has more than `Cinder.FilterPreferences.selector_threshold/0`
-  filters — below that the row is short enough to render whole. Every filter
-  starts shown; the drawer is how one gets trimmed or moved. A filter that still
-  carries a value renders even when hidden, so a value arriving from the URL
-  cannot narrow the table invisibly.
+  This is the row every table gets; `editable?` only decides whether the editor
+  button comes with it (see `Cinder.FilterPreferences.editable?/1`). Filters
+  start shown unless declared `filter_default_visible: false`; the drawer is how
+  one gets added, trimmed or moved. A filter that still carries a value renders
+  even when hidden, so a value arriving from the URL cannot narrow the table
+  invisibly.
 
   Because the controls data is built from the table's *visible* columns, a hidden
   column's filter never appears here at all.
@@ -221,13 +223,15 @@ defmodule Cinder.Controls do
 
   - `controls` — the controls data map from `build_controls_data/1`
   - `prefs` — the `Cinder.FilterPreferences` map for this table
+  - `editable?` — whether to render the "Edit filters" trigger
   - `drawer_open?` — whether the "Edit filters" drawer is currently open
   """
   attr :controls, :map, required: true
   attr :prefs, :map, required: true
+  attr :editable?, :boolean, default: false
   attr :drawer_open?, :boolean, default: false
 
-  def render_filter_selector(assigns) do
+  def render_filter_row(assigns) do
     assigns =
       assign(
         assigns,
@@ -263,6 +267,7 @@ defmodule Cinder.Controls do
       />
 
       <button
+        :if={@editable?}
         type="button"
         phx-click="toggle_filter_prefs_drawer"
         phx-target={@controls.target}

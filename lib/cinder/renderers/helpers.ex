@@ -40,7 +40,7 @@ defmodule Cinder.Renderers.Helpers do
   The filter row is hidden for the same reason the table is: until the stored
   preferences arrive from the browser, the row we would paint is the wrong one.
   """
-  def filter_prefs_hydration_class(%{filter_selector?: true, filter_prefs_hydrated?: false}),
+  def filter_prefs_hydration_class(%{filter_editable?: true, filter_prefs_hydrated?: false}),
     do: "invisible"
 
   def filter_prefs_hydration_class(_assigns), do: ""
