@@ -13,6 +13,7 @@ defmodule Cinder.Renderers.Table do
 
   alias Cinder.Renderers.BulkActions
   alias Cinder.Renderers.ColumnPrefs
+  alias Cinder.Renderers.FilterPrefs
   alias Cinder.Renderers.Pagination
   alias Cinder.Renderers.SortIcon
 
@@ -23,7 +24,11 @@ defmodule Cinder.Renderers.Table do
     ~H"""
     <div class={[@theme.container_class, "relative"]} data-key="container_class">
       <!-- Filter Controls (including search) -->
-      <div :if={@show_filters} class={@theme.controls_class} data-key="controls_class">
+      <div
+        :if={@show_filters}
+        class={[@theme.controls_class, filter_prefs_hydration_class(assigns)]}
+        data-key="controls_class"
+      >
         <Cinder.FilterManager.render_filter_controls
           table_id={@id}
           columns={Map.get(assigns, :filter_columns, @columns)}
@@ -39,9 +44,21 @@ defmodule Cinder.Renderers.Table do
           raw_filter_params={Map.get(assigns, :raw_filter_params, %{})}
           controls_slot={Map.get(assigns, :controls_slot, [])}
           filter_selector?={Map.get(assigns, :filter_selector?, false)}
-          shown_filters={Map.get(assigns, :shown_filters, MapSet.new())}
+          filter_prefs={Map.get(assigns, :filter_preferences, Cinder.FilterPreferences.empty())}
+          filter_prefs_drawer_open?={Map.get(assigns, :filter_prefs_drawer_open?, false)}
         />
       </div>
+
+      <!-- Filter preferences (Edit filters) -->
+      <FilterPrefs.render
+        id={@id}
+        myself={@myself}
+        theme={@theme}
+        enabled={Map.get(assigns, :filter_selector?, false)}
+        open?={Map.get(assigns, :filter_prefs_drawer_open?, false)}
+        drawer_filters={Map.get(assigns, :filter_prefs_drawer_columns, [])}
+        prefs={Map.get(assigns, :filter_preferences, Cinder.FilterPreferences.empty())}
+      />
 
       <!-- Column preferences (Edit columns) -->
       <ColumnPrefs.render

@@ -215,7 +215,15 @@ defmodule Cinder.Theme do
       "border-t border-gray-200 px-4 py-3 flex justify-between dark:border-gray-700",
     column_prefs_reset_button_class: "text-sm text-gray-600 hover:underline dark:text-gray-400",
     column_prefs_done_button_class:
-      "text-sm font-medium px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
+      "text-sm font-medium px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700",
+
+    # Filter preferences (Edit filters drawer). The drawer itself reuses the
+    # column_prefs_* keys above — one drawer, one styling — so only its trigger,
+    # which sits in the filter row rather than the table chrome, has its own.
+    filter_prefs_container_class: "cinder-filter-prefs",
+    filter_prefs_button_class:
+      "inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded text-gray-900 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:border-gray-700 dark:hover:bg-gray-700",
+    filter_prefs_button_icon_class: "w-4 h-4"
   }
 
   # Re-export the DSL functionality

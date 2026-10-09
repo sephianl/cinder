@@ -13,6 +13,7 @@ defmodule Cinder.Renderers.Grid do
   import Cinder.Renderers.Helpers
 
   alias Cinder.Renderers.BulkActions
+  alias Cinder.Renderers.FilterPrefs
   alias Cinder.Renderers.Pagination
   alias Cinder.Renderers.SortControls
 
@@ -41,12 +42,12 @@ defmodule Cinder.Renderers.Grid do
     ~H"""
     <div class={[@theme.container_class, "relative"]} data-key="container_class">
       <!-- Controls Area (filters + sort) -->
-      <div :if={@show_filters || (@show_sort && SortControls.has_sortable_columns?(@columns))} class={[@theme.controls_class, "!flex !flex-col"]} data-key="controls_class">
+      <div :if={@show_filters || (@show_sort && SortControls.has_sortable_columns?(@columns))} class={[@theme.controls_class, "!flex !flex-col", filter_prefs_hydration_class(assigns)]} data-key="controls_class">
         <!-- Filter Controls (including search) -->
         <Cinder.FilterManager.render_filter_controls
           :if={@show_filters}
           table_id={@id}
-          columns={Map.get(assigns, :query_columns, @columns)}
+          columns={Map.get(assigns, :filter_columns, @columns)}
           filters={@filters}
           theme={@theme}
           target={@myself}
@@ -58,6 +59,9 @@ defmodule Cinder.Renderers.Grid do
           search_placeholder={@search_placeholder}
           raw_filter_params={Map.get(assigns, :raw_filter_params, %{})}
           controls_slot={Map.get(assigns, :controls_slot, [])}
+          filter_selector?={Map.get(assigns, :filter_selector?, false)}
+          filter_prefs={Map.get(assigns, :filter_preferences, Cinder.FilterPreferences.empty())}
+          filter_prefs_drawer_open?={Map.get(assigns, :filter_prefs_drawer_open?, false)}
         />
 
         <!-- Sort Controls (button group since no table headers) -->
@@ -71,6 +75,17 @@ defmodule Cinder.Renderers.Grid do
           loading={@loading}
         />
       </div>
+
+      <!-- Filter preferences (Edit filters) -->
+      <FilterPrefs.render
+        id={@id}
+        myself={@myself}
+        theme={@theme}
+        enabled={Map.get(assigns, :filter_selector?, false)}
+        open?={Map.get(assigns, :filter_prefs_drawer_open?, false)}
+        drawer_filters={Map.get(assigns, :filter_prefs_drawer_columns, [])}
+        prefs={Map.get(assigns, :filter_preferences, Cinder.FilterPreferences.empty())}
+      />
 
       <!-- Bulk Actions -->
       <BulkActions.render

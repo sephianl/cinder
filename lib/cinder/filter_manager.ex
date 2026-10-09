@@ -72,13 +72,18 @@ defmodule Cinder.FilterManager do
     assigns =
       assigns
       |> assign(:controls_data, controls_data)
-      |> assign(:shown_filters, Map.get(assigns, :shown_filters, MapSet.new()))
+      |> assign(:filter_prefs, Map.get(assigns, :filter_prefs, Cinder.FilterPreferences.empty()))
+      |> assign(:filter_prefs_drawer_open?, Map.get(assigns, :filter_prefs_drawer_open?, false))
       |> assign(:has_content, has_content)
 
     ~H"""
     <div :if={@has_content} class={@theme.filter_container_class} data-key="filter_container_class">
       <form id={"#{@table_id}-filter-form"} phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
-        <Cinder.Controls.render_filter_selector controls={@controls_data} shown={@shown_filters} />
+        <Cinder.Controls.render_filter_selector
+          controls={@controls_data}
+          prefs={@filter_prefs}
+          drawer_open?={@filter_prefs_drawer_open?}
+        />
       </form>
     </div>
     """

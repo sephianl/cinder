@@ -97,7 +97,7 @@ defmodule Cinder.LiveComponent do
   end
 
   def update(%{__force_hydrate__: true}, socket) do
-    {:ok, force_hydrate_column_prefs(socket)}
+    {:ok, socket |> force_hydrate_column_prefs() |> force_hydrate_filter_prefs()}
   end
 
   def update(assigns, socket) do
@@ -107,8 +107,10 @@ defmodule Cinder.LiveComponent do
       socket
       |> assign(assigns)
       |> assign_defaults()
-      |> maybe_schedule_force_hydrate()
+      # After the definitions: whether the filter row needs an editor — and so
+      # whether it is waiting on stored preferences — is derived there.
       |> assign_column_definitions()
+      |> maybe_schedule_force_hydrate()
       |> decode_url_state(assigns)
       |> seed_default_filters()
       |> load_data_if_needed(prev_state)
@@ -361,19 +363,48 @@ defmodule Cinder.LiveComponent do
     {:noreply, socket}
   end
 
-  # Filter selector: reveal a filter input for a field.
+  # ============================================================================
+  # FILTER PREFERENCES EVENT HANDLERS
+  # ============================================================================
+
   @impl true
-  def handle_event("add_filter", %{"field" => field}, socket) do
-    {:noreply, update(socket, :shown_filters, &MapSet.put(&1, field))}
+  def handle_event("toggle_filter_visibility", %{"field" => field}, socket) do
+    socket =
+      update_filter_prefs(socket, fn prefs ->
+        Cinder.FilterPreferences.toggle_hidden(prefs, field, socket.assigns.filter_prefs_columns)
+      end)
+
+    # A filter taken out of the row must not keep filtering from behind it.
+    if Cinder.FilterPreferences.hidden?(socket.assigns.filter_preferences, field) do
+      {:noreply, clear_field_filter(socket, field)}
+    else
+      {:noreply, socket}
+    end
   end
 
-  # Filter selector: hide a filter and clear any value it was applying.
   @impl true
-  def handle_event("remove_filter", %{"field" => field}, socket) do
+  def handle_event("reorder_filters", %{"order" => new_order}, socket)
+      when is_list(new_order) do
     {:noreply,
-     socket
-     |> clear_field_filter(field)
-     |> drop_shown_filter(field)}
+     update_filter_prefs(socket, fn prefs ->
+       Cinder.FilterPreferences.set_order(prefs, new_order, socket.assigns.filter_prefs_columns)
+     end)}
+  end
+
+  @impl true
+  def handle_event("reset_filter_preferences", _params, socket) do
+    {:noreply, update_filter_prefs(socket, fn _prefs -> Cinder.FilterPreferences.empty() end)}
+  end
+
+  @impl true
+  def handle_event("apply_filter_preferences", payload, socket) do
+    {:noreply, hydrate_filter_prefs(socket, payload)}
+  end
+
+  @impl true
+  def handle_event("toggle_filter_prefs_drawer", _params, socket) do
+    {:noreply,
+     assign(socket, :filter_prefs_drawer_open?, !socket.assigns[:filter_prefs_drawer_open?])}
   end
 
   # ============================================================================
@@ -387,13 +418,11 @@ defmodule Cinder.LiveComponent do
         Cinder.ColumnPreferences.toggle_hidden(prefs, field, socket.assigns.declared_columns)
       end)
 
-    # A hidden column must not keep filtering: clear its value and drop it from
-    # the shown set so its filter disappears from the selector too.
+    # A hidden column must not keep filtering: clear its value. Its filter leaves
+    # the row with it, because the controls are built from the visible columns.
     socket =
       if MapSet.member?(socket.assigns.column_preferences.hidden, field) do
-        socket
-        |> clear_field_filter(field)
-        |> drop_shown_filter(field)
+        clear_field_filter(socket, field)
       else
         socket
       end
@@ -581,13 +610,6 @@ defmodule Cinder.LiveComponent do
     end
   end
 
-  defp drop_shown_filter(socket, field) do
-    case socket.assigns do
-      %{shown_filters: shown} -> assign(socket, :shown_filters, MapSet.delete(shown, field))
-      _ -> socket
-    end
-  end
-
   # ============================================================================
   # BULK ACTION HELPERS
   # ============================================================================
@@ -705,6 +727,20 @@ defmodule Cinder.LiveComponent do
   defp push_column_prefs_to_client(socket, prefs) do
     payload = Cinder.ColumnPreferences.to_payload(prefs)
     push_event(socket, "cinder:column_prefs_changed", Map.put(payload, :id, socket.assigns.id))
+  end
+
+  defp update_filter_prefs(socket, prefs_fn) do
+    new_prefs = prefs_fn.(socket.assigns.filter_preferences)
+
+    socket
+    |> assign(:filter_preferences, new_prefs)
+    |> assign_column_definitions()
+    |> push_filter_prefs_to_client(new_prefs)
+  end
+
+  defp push_filter_prefs_to_client(socket, prefs) do
+    payload = Cinder.FilterPreferences.to_payload(prefs)
+    push_event(socket, "cinder:filter_prefs_changed", Map.put(payload, :id, socket.assigns.id))
   end
 
   defp maybe_notify_columns_change(socket, prefs) do
@@ -1010,15 +1046,26 @@ defmodule Cinder.LiveComponent do
     |> assign(:column_preferences?, prefs_on?)
     |> assign(:show_prefs, assigns[:show_prefs] || false)
     |> assign(:header_trigger, assigns[:header_trigger] != false)
-    |> assign(:filter_selector?, assigns[:filter_selector?] || false)
-    |> assign_new(:shown_filters, fn -> MapSet.new() end)
     |> assign(:on_columns_change, assigns[:on_columns_change])
     |> assign_new(:column_preferences, fn ->
       Cinder.ColumnPreferences.from_columns(assigns[:col] || [])
     end)
     |> assign_new(:column_prefs_drawer_open?, fn -> false end)
     |> assign_new(:column_prefs_hydrated?, fn -> not prefs_on? end)
-    |> assign_new(:column_prefs_hydrate_scheduled?, fn -> false end)
+    |> assign_new(:prefs_hydrate_scheduled?, fn -> false end)
+    |> assign_filter_prefs_defaults()
+  end
+
+  # Filter preferences need no opt-in: `assign_column_definitions/1` turns the
+  # editor on once the row has more filters than it is worth showing whole, so
+  # the only thing to seed here is the state it edits. `filter_prefs_hydrated?`
+  # starts false and is resolved there too — a table below the threshold has
+  # nothing to hydrate and is never gated.
+  defp assign_filter_prefs_defaults(socket) do
+    socket
+    |> assign_new(:filter_preferences, fn -> Cinder.FilterPreferences.empty() end)
+    |> assign_new(:filter_prefs_drawer_open?, fn -> false end)
+    |> assign_new(:filter_prefs_hydrated?, fn -> false end)
   end
 
   defp hydrate_column_prefs(socket, payload) do
@@ -1040,19 +1087,41 @@ defmodule Cinder.LiveComponent do
 
   defp force_hydrate_column_prefs(socket), do: socket
 
-  defp maybe_schedule_force_hydrate(
-         %{
-           assigns: %{
-             column_preferences?: true,
-             column_prefs_hydrated?: false,
-             column_prefs_hydrate_scheduled?: false
-           }
-         } = socket
-       ) do
-    schedule_force_hydrate_when_connected(socket)
+  defp hydrate_filter_prefs(socket, payload) do
+    prefs = Cinder.FilterPreferences.from_payload(payload, socket.assigns.filter_prefs_columns)
+
+    socket
+    |> assign(:filter_preferences, prefs)
+    |> assign(:filter_prefs_hydrated?, true)
+    |> assign_column_definitions()
   end
 
-  defp maybe_schedule_force_hydrate(socket), do: socket
+  defp force_hydrate_filter_prefs(%{assigns: %{filter_prefs_hydrated?: false}} = socket) do
+    socket
+    |> assign(:filter_prefs_hydrated?, true)
+    |> assign_column_definitions()
+  end
+
+  defp force_hydrate_filter_prefs(socket), do: socket
+
+  # One timer covers both editors: whichever gate is still closed when it fires
+  # opens, so a browser that never answers the hook cannot leave the row or the
+  # table invisible.
+  defp maybe_schedule_force_hydrate(%{assigns: %{prefs_hydrate_scheduled?: true}} = socket),
+    do: socket
+
+  defp maybe_schedule_force_hydrate(socket) do
+    if prefs_hydration_pending?(socket) do
+      schedule_force_hydrate_when_connected(socket)
+    else
+      socket
+    end
+  end
+
+  defp prefs_hydration_pending?(%{assigns: assigns}) do
+    (assigns[:column_preferences?] && not assigns[:column_prefs_hydrated?]) ||
+      (assigns[:filter_selector?] && not assigns[:filter_prefs_hydrated?])
+  end
 
   defp schedule_force_hydrate_when_connected(socket) do
     if Phoenix.LiveView.connected?(socket) do
@@ -1062,7 +1131,7 @@ defmodule Cinder.LiveComponent do
         1000
       )
 
-      assign(socket, :column_prefs_hydrate_scheduled?, true)
+      assign(socket, :prefs_hydrate_scheduled?, true)
     else
       socket
     end
@@ -1082,8 +1151,25 @@ defmodule Cinder.LiveComponent do
     |> assign(:columns, visible)
     |> assign(:prefs_drawer_columns, drawer)
     |> assign(:query_columns, query)
-    |> assign(:filter_columns, filter_columns(visible, query, declared_columns))
+    |> assign_filter_definitions(filter_columns(visible, query, declared_columns))
     |> assign(:filter_field_names, filterable_field_names(query))
+  end
+
+  # A long filter row becomes editable; a short one stays as declared. Both the
+  # row and the drawer work from the same ordered list, so dragging a filter in
+  # the drawer moves it in the row — independently of the column order.
+  defp assign_filter_definitions(socket, filter_cols) do
+    selector? = Cinder.FilterPreferences.selector?(filter_cols)
+    prefs = socket.assigns.filter_preferences
+
+    ordered =
+      if selector?, do: Cinder.FilterPreferences.order(filter_cols, prefs), else: filter_cols
+
+    socket
+    |> assign(:filter_selector?, selector?)
+    |> assign(:filter_columns, ordered)
+    |> assign(:filter_prefs_columns, filter_cols)
+    |> assign(:filter_prefs_drawer_columns, ordered)
   end
 
   # Columns whose filters the controls should show: the visible display columns

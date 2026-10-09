@@ -37,7 +37,9 @@ defmodule Cinder.ColumnPreferencesLiveComponentTest do
         column_prefs_drawer_open?: false,
         column_prefs_hydrated?: Keyword.get(opts, :column_prefs_hydrated?, false),
         query_columns: declared,
-        filter_field_names: []
+        filter_field_names: [],
+        filter_preferences: Cinder.FilterPreferences.empty(),
+        filter_prefs_hydrated?: true
       }
 
     %Phoenix.LiveView.Socket{assigns: assigns, root_pid: self()}

@@ -194,17 +194,17 @@ msgstr "Typ om meer opties te zoeken..."
 msgid "An error occurred while loading data"
 msgstr "Er is een fout opgetreden bij het laden van gegevens"
 
-#: lib/cinder/renderers/column_prefs.ex
+#: lib/cinder/renderers/prefs_drawer.ex
 #, elixir-autogen, elixir-format
 msgid "Close"
 msgstr "Sluiten"
 
-#: lib/cinder/renderers/column_prefs.ex
+#: lib/cinder/renderers/prefs_drawer.ex
 #, elixir-autogen, elixir-format
 msgid "Done"
 msgstr "Klaar"
 
-#: lib/cinder/renderers/column_prefs.ex
+#: lib/cinder/renderers/prefs_drawer.ex
 #, elixir-autogen, elixir-format
 msgid "Drag to reorder"
 msgstr "Sleep om volgorde te wijzigen"
@@ -219,7 +219,12 @@ msgstr "Columns aanpassen"
 msgid "Reset filters"
 msgstr "Filters resetten"
 
-#: lib/cinder/renderers/column_prefs.ex
+#: lib/cinder/renderers/prefs_drawer.ex
 #, elixir-autogen, elixir-format
 msgid "Reset to defaults"
 msgstr "Terug naar standaardinstellingen"
+
+#: lib/cinder/renderers/filter_prefs.ex
+#, elixir-autogen, elixir-format
+msgid "Edit filters"
+msgstr "Filters aanpassen"

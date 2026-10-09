@@ -4,6 +4,7 @@ defmodule Cinder.ControlsTest do
 
   alias Cinder.Controls
   alias Cinder.FilterManager
+  alias Cinder.FilterPreferences
 
   defmodule TestUser do
     use Ash.Resource,
@@ -493,7 +494,7 @@ defmodule Cinder.ControlsTest do
        }}
     end
 
-    defp render_selector(filters, shown) do
+    defp render_selector(filters, prefs, drawer_open? \\ false) do
       controls = %{
         filters: filters,
         search: nil,
@@ -504,26 +505,46 @@ defmodule Cinder.ControlsTest do
         raw_filter_params: %{}
       }
 
-      render_component(&Controls.render_filter_selector/1, %{controls: controls, shown: shown})
+      render_component(&Controls.render_filter_selector/1, %{
+        controls: controls,
+        prefs: prefs,
+        drawer_open?: drawer_open?
+      })
     end
 
-    test "lists every filterable column with add/remove toggles" do
+    test "renders every filter and the button that opens the drawer" do
       html =
         render_selector(
           [selector_filter("name"), selector_filter("status")],
-          MapSet.new(["name"])
+          FilterPreferences.empty()
         )
 
-      # Both columns appear in the "add filter" dropdown.
-      assert html =~ "Name"
-      assert html =~ "Status"
-      # The shown one can be removed; the hidden one can be added.
-      assert html =~ "remove_filter"
-      assert html =~ "add_filter"
+      assert html =~ ~s(id="t-filter-name")
+      assert html =~ ~s(id="t-filter-status")
+      assert html =~ ~s(phx-click="toggle_filter_prefs_drawer")
+      assert html =~ "Filters"
+      assert html =~ ~s(aria-expanded="false")
     end
 
-    test "shows a filter that already carries a value even if not explicitly added" do
-      html = render_selector([selector_filter("name", "carried-value")], MapSet.new())
+    test "the trigger announces an open drawer" do
+      html = render_selector([selector_filter("name")], FilterPreferences.empty(), true)
+
+      assert html =~ ~s(aria-expanded="true")
+    end
+
+    test "a hidden filter leaves the row" do
+      prefs = %{order: nil, hidden: MapSet.new(["status"])}
+
+      html = render_selector([selector_filter("name"), selector_filter("status")], prefs)
+
+      assert html =~ ~s(id="t-filter-name")
+      refute html =~ ~s(id="t-filter-status")
+    end
+
+    test "a hidden filter still carrying a value is shown anyway" do
+      prefs = %{order: nil, hidden: MapSet.new(["name"])}
+
+      html = render_selector([selector_filter("name", "carried-value")], prefs)
 
       assert html =~ "carried-value"
     end
