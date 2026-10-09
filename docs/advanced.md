@@ -599,6 +599,7 @@ Four filters here, so the row starts with all four shown and the button to trim 
 Behaviour worth knowing:
 
 - **Everything starts shown.** A table looks exactly as it did until someone edits it.
+- **The row keeps its "Reset filters" button**, beside the editor trigger — the same control the default layout gets from `render_header/1`, pushing `clear_all_filters`. It clears filter *values*; the drawer's "Reset to defaults" restores which filters are *shown*. Styled by `filter_clear_all_class`, as everywhere else.
 - **The order is the filter row's own.** Dragging a filter in the drawer moves it in the row, and leaves the column order alone.
 - **Taking a filter out clears its value**, so a filter can never narrow the table from behind the drawer. A filter arriving from the URL with a value is shown even if it was hidden.
 - **Hiding a *column* still removes its filter** — the row is built from the table's visible columns. Filter order and visibility are separate; which fields are available to filter on is not.

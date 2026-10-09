@@ -212,6 +212,11 @@ defmodule Cinder.Controls do
   Because the controls data is built from the table's *visible* columns, a hidden
   column's filter never appears here at all.
 
+  Carries the same "Reset filters" button the default layout gets through
+  `render_header/1`, so a table does not lose it by crossing the threshold. It
+  clears filter values only — search has its own clear, and which filters are
+  shown is the drawer's "Reset to defaults".
+
   ## Attributes
 
   - `controls` — the controls data map from `build_controls_data/1`
@@ -250,6 +255,12 @@ defmodule Cinder.Controls do
           raw_filter_params={@controls.raw_filter_params}
         />
       </div>
+
+      <.render_clear_all
+        active_filter_count={@controls.active_filter_count}
+        target={@controls.target}
+        theme={@controls.theme}
+      />
 
       <button
         type="button"
