@@ -12,6 +12,7 @@ This guide covers URL state management, relationships, embedded resources, refre
 - [Performance Optimization](#performance-optimization)
 - [Query Access](#query-access)
 - [Column Preferences](#column-preferences)
+- [Filter Preferences](#filter-preferences)
 - [Selection & Bulk Actions](#selection--bulk-actions)
 
 **See also:** [Filters](filters.md) | [Sorting](sorting.md)
@@ -578,6 +579,33 @@ end
 ```
 
 `prefs` has the shape `%{order: [field] | nil, hidden: [field]}`. To hydrate from server-side storage on mount, send the `apply_column_preferences` event to the LiveComponent with that same shape.
+
+## Filter Preferences
+
+The filter row is editable the same way the column list is, and entirely separately. No opt-in: once a collection declares **more than three filters** (search does not count), Cinder adds a "Filters" button to the row that opens an "Edit filters" drawer — checkboxes to take a filter out of the row, drag handles to reorder it.
+
+```heex
+<Cinder.collection resource={MyApp.User} actor={@current_user} id="users-table">
+  <:col :let={user} field="name" search sort>{user.name}</:col>
+  <:col :let={user} field="email" filter>{user.email}</:col>
+  <:col :let={user} field="status" filter={:select}>{user.status}</:col>
+  <:col :let={user} field="city" filter>{user.city}</:col>
+  <:col :let={user} field="role" filter>{user.role}</:col>
+</Cinder.collection>
+```
+
+Four filters here, so the row starts with all four shown and the button to trim them. Three or fewer, and the row renders whole with no button.
+
+Behaviour worth knowing:
+
+- **Everything starts shown.** A table looks exactly as it did until someone edits it.
+- **The order is the filter row's own.** Dragging a filter in the drawer moves it in the row, and leaves the column order alone.
+- **Taking a filter out clears its value**, so a filter can never narrow the table from behind the drawer. A filter arriving from the URL with a value is shown even if it was hidden.
+- **Hiding a *column* still removes its filter** — the row is built from the table's visible columns. Filter order and visibility are separate; which fields are available to filter on is not.
+- **Preferences persist to `localStorage`** under `cinder:filter_prefs:<table id>`, separate from `cinder:column_prefs:<table id>`. Both come from the same [JavaScript hook setup](#javascript-hook-setup); `createCinderHooks/1` returns `CinderFilterPrefs` and `CinderFilterSortable` alongside the column pair.
+- **The drawer is styled by the `column_prefs_*` theme keys**, shared with the column editor so the two always match. Only its container and trigger have keys of their own: `filter_prefs_container_class`, `filter_prefs_button_class` and `filter_prefs_button_icon_class`.
+
+A `:controls` slot takes precedence: a collection that lays out its own filter controls keeps doing exactly that, with no button and no drawer.
 
 ## Selection & Bulk Actions
 
