@@ -540,7 +540,7 @@ defmodule Cinder.Table.FilterSlotsTest do
       html = render_component(&Cinder.Table.table/1, assigns)
 
       # Should show filter controls because filter slot is present
-      assert html =~ "Filters"
+      assert html =~ ~s(data-key="filter_container_class")
     end
 
     test "handles mixed filter types correctly" do
@@ -718,7 +718,7 @@ defmodule Cinder.Table.FilterSlotsTest do
       refute thead =~ "Department"
 
       # But should have filter controls (exact HTML would depend on filter rendering)
-      assert html =~ "Filters"
+      assert html =~ ~s(data-key="filter_container_class")
     end
 
     test "checkbox filter with custom value renders and processes correctly" do
@@ -759,7 +759,7 @@ defmodule Cinder.Table.FilterSlotsTest do
 
       # Filter-only slots should be processed and available for URL state management
       # The actual URL encoding/decoding would be tested in URL sync integration tests
-      assert html =~ "Filters"
+      assert html =~ ~s(data-key="filter_container_class")
     end
   end
 

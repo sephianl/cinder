@@ -818,18 +818,23 @@ defmodule Cinder.TableTest do
       assert html =~ "cinder-table"
     end
 
-    test "filters_label attribute customizes filter section label" do
+    # The filter row carries no title; `filters_label` labels the "Edit filters"
+    # trigger, which a row only earns once it has something worth editing.
+    test "filters_label attribute labels the filter editor trigger" do
       assigns = %{
         resource: TestUser,
         actor: nil,
         filters_label: "Search Options",
-        col: [%{field: "name", filter: true, __slot__: :col}]
+        col:
+          for field <- ["name", "email", "age", "active"] do
+            %{field: field, filter: true, __slot__: :col}
+          end
       }
 
       html = render_component(&Cinder.Table.table/1, assigns)
 
-      # Custom filters label should be present in the rendered HTML
       assert html =~ "Search Options"
+      assert html =~ ~s(phx-click="toggle_filter_prefs_drawer")
     end
 
     test "default messages are used when not specified" do
@@ -843,8 +848,8 @@ defmodule Cinder.TableTest do
 
       # Default loading message should be present (component starts in loading state)
       assert html =~ "Loading..."
-      # Default filters label should be present
-      assert html =~ "Filters"
+      # And the filter row itself; it carries no title to assert.
+      assert html =~ ~s(data-key="filter_container_class")
       # Note: "No results found" is only shown when data is empty AND not loading,
       # which doesn't occur in static render tests
     end
