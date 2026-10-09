@@ -153,7 +153,7 @@ defmodule Cinder.Integration.LiveViewTest do
     test "typing in a text filter narrows results", %{conn: conn, path: path} do
       conn
       |> visit(path)
-      |> fill_in("Title", with: "Dirt")
+      |> fill_in("#cinder-collection-filter-title", "Title", with: "Dirt")
       |> assert_has("td", text: "Dirt")
       |> refute_has("td", text: "Blue Train")
     end
@@ -161,9 +161,9 @@ defmodule Cinder.Integration.LiveViewTest do
     test "clearing a text filter restores results", %{conn: conn, path: path} do
       conn
       |> visit(path)
-      |> fill_in("Title", with: "Dirt")
+      |> fill_in("#cinder-collection-filter-title", "Title", with: "Dirt")
       |> refute_has("td", text: "Blue Train")
-      |> fill_in("Title", with: "")
+      |> fill_in("#cinder-collection-filter-title", "Title", with: "")
       |> assert_has("td", text: "Blue Train")
     end
   end
@@ -201,7 +201,7 @@ defmodule Cinder.Integration.LiveViewTest do
       |> visit(path <> "?page_size=3&sort=title&page=2")
       # We're on page 2 — should NOT have page 1 data
       |> refute_has("td", text: "A Love Supreme")
-      |> fill_in("Title", with: "Love")
+      |> fill_in("#cinder-collection-filter-title", "Title", with: "Love")
       # Filter should reset to page 1 and show matching result
       |> assert_has("td", text: "A Love Supreme")
     end
