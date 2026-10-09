@@ -52,7 +52,11 @@ defmodule Cinder.ThemeVerificationTest do
     :column_prefs_done_button_class,
     :column_prefs_checkbox_class,
     :column_prefs_drag_handle_class,
-    :column_prefs_pinned_icon_class
+    :column_prefs_pinned_icon_class,
+    # The filter editor reuses the drawer keys above; only its trigger is its own.
+    :filter_prefs_container_class,
+    :filter_prefs_button_class,
+    :filter_prefs_button_icon_class
   ]
 
   describe "theme multi-select properties" do
