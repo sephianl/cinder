@@ -122,6 +122,14 @@ defmodule Cinder.UrlSync do
     {:halt, update_url(socket, encoded_state, current_uri)}
   end
 
+  # State restored from the reader's browser replaces the current history entry rather
+  # than adding one: they did not navigate here, so Back must still lead where they came
+  # from and not to this same page with its filters stripped off.
+  defp info_hook({:cinder_restore_url, _table_id, encoded_state}, socket) do
+    current_uri = get_in(socket.assigns, [:url_state, :uri])
+    {:halt, update_url(socket, encoded_state, current_uri, replace: true)}
+  end
+
   defp info_hook(_message, socket), do: {:cont, socket}
 
   @doc """
@@ -140,9 +148,9 @@ defmodule Cinder.UrlSync do
 
   Updated socket with URL changed via `push_patch/2`
   """
-  def update_url(socket, encoded_state, current_uri \\ nil) do
+  def update_url(socket, encoded_state, current_uri \\ nil, opts \\ []) do
     new_url = build_url(encoded_state, current_uri, socket)
-    Phoenix.LiveView.push_patch(socket, to: new_url)
+    Phoenix.LiveView.push_patch(socket, to: new_url, replace: Keyword.get(opts, :replace, false))
   end
 
   @doc """

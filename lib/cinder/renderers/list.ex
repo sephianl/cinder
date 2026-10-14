@@ -48,7 +48,16 @@ defmodule Cinder.Renderers.List do
       )
 
     ~H"""
-    <div class={[@theme.container_class, "relative"]} data-key="container_class">
+    <div
+      class={[@theme.container_class, "relative", state_hydration_class(assigns)]}
+      data-key="container_class"
+    >
+      <.table_state_hook
+        id={@id}
+        myself={@myself}
+        enabled={Map.get(assigns, :persist_state?, false)}
+      />
+
       <!-- Controls Area (filters + sort) -->
       <div :if={@show_filters || (@show_sort && SortControls.has_sortable_columns?(@columns))} class={[@theme.controls_class, "!flex !flex-col", filter_prefs_hydration_class(assigns)]} data-key="controls_class">
         <!-- Filter Controls (including search) -->
@@ -155,7 +164,13 @@ defmodule Cinder.Renderers.List do
           <%= if has_slot?(assigns, :empty_slot) do %>
             {render_slot(@empty_slot, empty_context(assigns))}
           <% else %>
-            {@empty_message}
+            <.render_empty
+              empty_message={@empty_message}
+              empty_filtered_message={Map.get(assigns, :empty_filtered_message)}
+              filtered?={empty_context(assigns).filtered?}
+              target={@myself}
+              theme={@theme}
+            />
           <% end %>
         </div>
       </div>

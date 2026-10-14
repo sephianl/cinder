@@ -139,7 +139,11 @@ defmodule Cinder.LiveComponent do
   end
 
   def update(%{__force_hydrate__: true}, socket) do
-    {:ok, socket |> force_hydrate_column_prefs() |> force_hydrate_filter_prefs()}
+    {:ok,
+     socket
+     |> force_hydrate_column_prefs()
+     |> force_hydrate_filter_prefs()
+     |> force_hydrate_table_state()}
   end
 
   def update(assigns, socket) do
@@ -397,12 +401,17 @@ defmodule Cinder.LiveComponent do
       |> Cinder.FilterManager.clear_all_filters()
       |> Cinder.FilterManager.apply_defaults(socket.assigns.query_columns)
 
-    if new_filters == socket.assigns.filters do
+    if new_filters == socket.assigns.filters and socket.assigns.search_term in [nil, ""] do
       {:noreply, socket}
     else
+      # The search term goes with them. Search sits in the filter row and narrows
+      # the list the same way a filter does, so a reset that left it applied would
+      # hand back a list still missing rows with nothing on screen to say why —
+      # the exact confusion the reset exists to undo.
       socket =
         socket
         |> assign(:filters, new_filters)
+        |> assign(:search_term, "")
         |> assign(:current_page, 1)
         |> assign(:after_keyset, nil)
         |> assign(:before_keyset, nil)
@@ -452,6 +461,11 @@ defmodule Cinder.LiveComponent do
   @impl true
   def handle_event("apply_filter_preferences", payload, socket) do
     {:noreply, hydrate_filter_prefs(socket, payload)}
+  end
+
+  @impl true
+  def handle_event("hydrate_table_state", payload, socket) do
+    {:noreply, hydrate_table_state(socket, payload)}
   end
 
   @impl true
@@ -1072,36 +1086,59 @@ defmodule Cinder.LiveComponent do
   # ============================================================================
 
   defp notify_state_change(socket, filters \\ nil) do
+    socket
+    |> persist_state(filters)
+    |> Cinder.UrlManager.notify_state_change(current_state(socket, filters))
+  end
+
+  defp current_state(socket, filters) do
     filters = filters || socket.assigns.filters
-    current_page = socket.assigns.current_page
-    sort_by = socket.assigns.sort_by
     page_size_config = socket.assigns.page_size_config
-    search_term = socket.assigns.search_term
-    filter_field_names = socket.assigns.filter_field_names
-    pagination_mode = socket.assigns.pagination_mode
 
     state = %{
       filters: filters,
-      current_page: current_page,
-      sort_by: sort_by,
+      current_page: socket.assigns.current_page,
+      sort_by: socket.assigns.sort_by,
       page_size: page_size_config.selected_page_size,
       default_page_size: page_size_config.default_page_size,
-      search_term: search_term,
-      filter_field_names: filter_field_names
+      search_term: socket.assigns.search_term,
+      filter_field_names: socket.assigns.filter_field_names
     }
 
     # For keyset pagination, include after/before cursors for URL persistence
-    state =
-      if pagination_mode == :keyset do
-        state
-        |> maybe_put_cursor(:after, socket.assigns.after_keyset)
-        |> maybe_put_cursor(:before, socket.assigns.before_keyset)
-      else
-        state
-      end
-
-    Cinder.UrlManager.notify_state_change(socket, state)
+    if socket.assigns.pagination_mode == :keyset do
+      state
+      |> maybe_put_cursor(:after, socket.assigns.after_keyset)
+      |> maybe_put_cursor(:before, socket.assigns.before_keyset)
+    else
+      state
+    end
   end
+
+  defp encoded_state(socket, filters) do
+    Cinder.UrlManager.encode_state(current_state(socket, filters))
+  end
+
+  # Writing the stores follows every state change rather than being a separate
+  # event, so a reset is persisted the same way a filter is: the payload for a
+  # cleared filter is simply empty, which overwrites what was there.
+  #
+  # Nothing is written before hydration, or the state the browser is still about
+  # to send would be overwritten by the URL it was meant to supplement.
+  defp persist_state(
+         %{assigns: %{persist_state?: true, table_state_hydrated?: true}} = socket,
+         filters
+       ) do
+    payload =
+      socket
+      |> encoded_state(filters)
+      |> Cinder.StateStorage.split()
+      |> Map.put("id", socket.assigns.id)
+
+    Phoenix.LiveView.push_event(socket, "cinder:table_state_changed", payload)
+  end
+
+  defp persist_state(socket, _filters), do: socket
 
   # ============================================================================
   # PRIVATE FUNCTIONS - URL State Decoding
@@ -1243,8 +1280,27 @@ defmodule Cinder.LiveComponent do
     |> assign(:id_field, assigns[:id_field] || :id)
     |> assign(:sort_mode, assigns[:sort_mode] || :additive)
     |> assign_column_prefs_defaults(assigns)
+    |> assign_state_storage_defaults(assigns)
     # Bulk actions
     |> assign_new(:bulk_action_slots, fn -> [] end)
+  end
+
+  # Remembering state is opt-in, like column preferences.
+  #
+  # `table_state_hydrated?` hides the table until the browser has said what it
+  # stored, exactly as the two preference gates do — so the rows the reader
+  # would otherwise watch being filtered away are never painted. It does *not*
+  # hold the query back: a table whose rows depend on a hook answering is a
+  # table that shows nothing wherever that hook does not run, which includes
+  # every host that has not registered it and every LiveView test. The price is
+  # one extra query on a visit that restores something, which buys the table
+  # working without JS.
+  defp assign_state_storage_defaults(socket, assigns) do
+    persist? = Map.get(assigns, :persist_state?, false)
+
+    socket
+    |> assign(:persist_state?, persist?)
+    |> assign_new(:table_state_hydrated?, fn -> not persist? end)
   end
 
   defp assign_column_prefs_defaults(socket, assigns) do
@@ -1281,6 +1337,48 @@ defmodule Cinder.LiveComponent do
     |> assign_new(:filter_prefs_drawer_open?, fn -> false end)
     |> assign_new(:filter_prefs_hydrated?, fn -> false end)
   end
+
+  # The hook pushes whatever the two stores held, even when that is nothing —
+  # that push is what opens the gate, so a browser with an empty store is not
+  # left waiting on the failsafe timer.
+  defp hydrate_table_state(socket, payload) do
+    socket = assign(socket, :table_state_hydrated?, true)
+    url_params = socket.assigns[:url_raw_params] || %{}
+
+    case Cinder.StateStorage.restore(url_params, payload, socket.assigns.filter_field_names) do
+      {:ok, restored} ->
+        # The second query of the visit, and the reason restoring is not free.
+        # Loaded here rather than left to the URL patch because the patch is a
+        # round trip away; `data_state/1` covers everything restored, so when it
+        # does arrive `load_data_if_needed/2` sees no change and queries nothing.
+        socket
+        |> decode_url_state(%{url_raw_params: Map.merge(url_params, restored)})
+        |> load_data()
+        |> request_restored_url()
+
+      # The data is already loaded from the URL, and nothing was restored to
+      # change it — opening the gate is the whole job.
+      :none ->
+        socket
+    end
+  end
+
+  # Restoring is not a navigation the reader performed, so the URL it produces
+  # replaces the current history entry instead of adding one — otherwise Back
+  # would land on the same page shorn of its filters. The parent LiveView owns
+  # the URL, so it does the patching; `Cinder.UrlSync` injects the handler.
+  defp request_restored_url(socket) do
+    if socket.assigns[:on_state_change] do
+      send(self(), {:cinder_restore_url, socket.assigns.id, encoded_state(socket, nil)})
+    end
+
+    socket
+  end
+
+  defp force_hydrate_table_state(%{assigns: %{table_state_hydrated?: false}} = socket),
+    do: assign(socket, :table_state_hydrated?, true)
+
+  defp force_hydrate_table_state(socket), do: socket
 
   defp hydrate_column_prefs(socket, payload) do
     prefs = Cinder.ColumnPreferences.from_payload(payload, socket.assigns.declared_columns)
@@ -1334,7 +1432,8 @@ defmodule Cinder.LiveComponent do
 
   defp prefs_hydration_pending?(%{assigns: assigns}) do
     (assigns[:column_preferences?] && not assigns[:column_prefs_hydrated?]) ||
-      (assigns[:filter_editable?] && not assigns[:filter_prefs_hydrated?])
+      (assigns[:filter_editable?] && not assigns[:filter_prefs_hydrated?]) ||
+      (assigns[:persist_state?] && not assigns[:table_state_hydrated?])
   end
 
   defp schedule_force_hydrate_when_connected(socket) do

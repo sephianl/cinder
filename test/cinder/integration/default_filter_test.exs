@@ -20,7 +20,7 @@ defmodule Cinder.Integration.DefaultFilterTest do
   # A collection whose date column defaults to @default_date.
   defp dated_collection(assigns) do
     ~H"""
-    <Cinder.collection resource={Cinder.Integration.Album} url_state={@url_state}>
+    <Cinder.collection resource={Music.Album} url_state={@url_state}>
       <:col :let={album} field="title" sort>{album.title}</:col>
       <:col :let={album} field="release_date" filter={[type: :date, default: ~D[2020-01-01]]}>
         {to_string(album.release_date)}
@@ -42,8 +42,8 @@ defmodule Cinder.Integration.DefaultFilterTest do
       generate(album(title: "After Default", release_date: ~D[2021-03-20], artist_id: artist.id))
 
     on_exit(fn ->
-      Ash.bulk_destroy!(Cinder.Integration.Album, :destroy, %{})
-      Ash.bulk_destroy!(Cinder.Integration.Artist, :destroy, %{})
+      Ash.bulk_destroy!(Music.Album, :destroy, %{})
+      Ash.bulk_destroy!(Music.Artist, :destroy, %{})
     end)
 
     %{
