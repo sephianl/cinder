@@ -215,6 +215,7 @@ msgid "Edit columns"
 msgstr "Columns aanpassen"
 
 #: lib/cinder/controls.ex
+#: lib/cinder/renderers/helpers.ex
 #, elixir-autogen, elixir-format
 msgid "Reset filters"
 msgstr "Filters resetten"
@@ -228,3 +229,8 @@ msgstr "Terug naar standaardinstellingen"
 #, elixir-autogen, elixir-format
 msgid "Edit filters"
 msgstr "Filters aanpassen"
+
+#: lib/cinder/renderers/helpers.ex
+#, elixir-autogen, elixir-format
+msgid "No results match the current filters."
+msgstr "Geen resultaten voor de huidige filters."

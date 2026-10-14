@@ -2,6 +2,7 @@ defmodule Cinder.Renderers.Helpers do
   @moduledoc false
 
   use Phoenix.Component
+  use Cinder.Messages
 
   @doc """
   Renders the "columns" glyph used by the column-preferences trigger.
@@ -44,6 +45,91 @@ defmodule Cinder.Renderers.Helpers do
     do: "invisible"
 
   def filter_prefs_hydration_class(_assigns), do: ""
+
+  @doc """
+  `invisible` while a table's remembered state is still in flight.
+
+  The whole collection is held back, filter row included, for the reason the
+  preference gates hold back theirs: until the browser says what it stored, the
+  rows and the filter values on screen are the wrong ones, and watching them be
+  replaced is worse than waiting a round trip for the right ones. The data is
+  queried either way — this hides a paint, it does not hold a query — so a host
+  that never registers the hook still gets its table, one second later, from the
+  failsafe in `Cinder.LiveComponent`.
+  """
+  def state_hydration_class(%{persist_state?: true, table_state_hydrated?: false}),
+    do: "invisible"
+
+  def state_hydration_class(_assigns), do: ""
+
+  @doc """
+  The hidden element carrying the table-state hook.
+
+  Mounted inside the LiveComponent so its push reaches the component rather than
+  the host LiveView, and rendered only when the table remembers its state at all
+  — otherwise nothing would ever release the hydration gate the hook opens.
+  """
+  attr :id, :string, required: true
+  attr :myself, :any, required: true
+  attr :enabled, :boolean, required: true
+
+  def table_state_hook(assigns) do
+    ~H"""
+    <div
+      :if={@enabled}
+      id={"#{@id}-table-state-hook"}
+      phx-hook="CinderTableState"
+      phx-target={@myself}
+      data-cinder-table-id={@id}
+      class="hidden"
+    />
+    """
+  end
+
+  @doc """
+  The empty state, which says *why* a list is empty when a filter is the reason.
+
+  A list emptied by a filter the reader does not remember setting is the one
+  failure mode remembered state introduces: the rows that are missing leave no
+  trace, so an empty table that says only "No products found" reads as data loss
+  rather than as a filter. When a filter or search is responsible the message
+  names that, and the way out sits in the empty state itself rather than only in
+  the row above — someone who does not realise a filter is set has no reason to
+  look up there for the fix.
+
+  `empty_filtered_message` lets a page name its own noun ("No products match the
+  current filters"); without one the generic phrasing is used.
+  """
+  attr :empty_message, :string, required: true
+  attr :empty_filtered_message, :string, default: nil
+  attr :filtered?, :boolean, required: true
+  attr :target, :any, default: nil
+  attr :theme, :map, required: true
+
+  def render_empty(assigns) do
+    ~H"""
+    <%= if @filtered? do %>
+      <div class="flex flex-col items-center gap-3">
+        <span>
+          {@empty_filtered_message ||
+            dgettext("cinder", "No results match the current filters.")}
+        </span>
+
+        <button
+          type="button"
+          phx-click="clear_all_filters"
+          phx-target={@target}
+          class={@theme.filter_clear_all_class}
+          data-key="filter_clear_all_class"
+        >
+          {dgettext("cinder", "Reset filters")}
+        </button>
+      </div>
+    <% else %>
+      {@empty_message}
+    <% end %>
+    """
+  end
 
   @doc """
   Checks whether a slot assign contains any provided slot content.

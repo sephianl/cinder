@@ -22,7 +22,16 @@ defmodule Cinder.Renderers.Table do
   """
   def render(assigns) do
     ~H"""
-    <div class={[@theme.container_class, "relative"]} data-key="container_class">
+    <div
+      class={[@theme.container_class, "relative", state_hydration_class(assigns)]}
+      data-key="container_class"
+    >
+      <.table_state_hook
+        id={@id}
+        myself={@myself}
+        enabled={Map.get(assigns, :persist_state?, false)}
+      />
+
       <!-- Filter Controls (including search) -->
       <div
         :if={@show_filters}
@@ -169,7 +178,13 @@ defmodule Cinder.Renderers.Table do
                 <%= if has_slot?(assigns, :empty_slot) do %>
                   {render_slot(@empty_slot, empty_context(assigns))}
                 <% else %>
-                  {@empty_message}
+                  <.render_empty
+                    empty_message={@empty_message}
+                    empty_filtered_message={Map.get(assigns, :empty_filtered_message)}
+                    filtered?={empty_context(assigns).filtered?}
+                    target={@myself}
+                    theme={@theme}
+                  />
                 <% end %>
               </td>
             </tr>

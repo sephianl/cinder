@@ -207,6 +207,24 @@ defmodule Cinder.Collection do
     doc: "Message to show when no results"
   )
 
+  attr(:empty_filtered_message, :string,
+    default: nil,
+    doc:
+      "Message to show when no results *and* a filter or search is responsible. " <>
+        "Lets a list name its own subject (\"No products match the current filters\") " <>
+        "rather than take the generic phrasing. Ignored when an `:empty` slot is given."
+  )
+
+  attr(:persist_state?, :boolean,
+    default: false,
+    doc:
+      "Whether the table remembers its state between visits. Sort and page size are kept " <>
+        "indefinitely, filter values and the search term for the life of the tab; see " <>
+        "`Cinder.StateStorage`. Opt-in, like `column_preferences?`: it makes the first " <>
+        "query wait one round trip for the browser to report what it has stored, and it " <>
+        "rewrites the URL on arrival, so a table takes it on deliberately."
+  )
+
   attr(:error_message, :string,
     default: nil,
     doc: "Message to show on error"
@@ -570,6 +588,8 @@ defmodule Cinder.Collection do
         filters_label={@filters_label}
         sort_label={@sort_label}
         empty_message={@empty_message}
+        empty_filtered_message={@empty_filtered_message}
+        persist_state?={@persist_state?}
         error_message={@error_message}
         controls_slot={@controls_slot}
         loading_slot={@loading_slot}
