@@ -29,11 +29,20 @@ defmodule Cinder.StateStorageTest do
       assert params == %{"search" => "widget", "zone" => "B-12"}
     end
 
-    test "keeps the page number and keyset cursors in neither store" do
+    test "keeps the page number with the filters, and keyset cursors nowhere" do
       split = StateStorage.split(%{page: "7", after: "abc", before: "xyz", sort: "-code"})
 
       assert split["durable"]["params"] == %{"sort" => "-code"}
-      assert split["session"]["params"] == %{}
+      assert split["session"]["params"] == %{"page" => "7"}
+    end
+
+    test "stores no page at all on page 1" do
+      # `encode_state/1` omits the page entirely on page 1, so paging back to the
+      # first page overwrites the stored page rather than leaving the old one to
+      # be restored.
+      split = StateStorage.split(%{sort: "-code"})
+
+      refute Map.has_key?(split["session"]["params"], "page")
     end
 
     test "drops the filter-fields metadata rather than storing it" do
@@ -129,7 +138,11 @@ defmodule Cinder.StateStorageTest do
              ) == :none
     end
 
-    test "a page number in the URL speaks for neither group" do
+    test "a page number in the URL speaks for the query group" do
+      # A link to page 3 describes a position in the list the sender was looking
+      # at. Restoring the reader's own filters underneath it would renumber the
+      # pages, so page 3 would show rows the sender never saw. The sort still
+      # restores — it is in the other group.
       assert {:ok, restored} =
                StateStorage.restore(
                  %{"page" => "3"},
@@ -137,7 +150,31 @@ defmodule Cinder.StateStorageTest do
                  ["zone"]
                )
 
-      assert restored == %{"sort" => "-code", "zone" => "B-12"}
+      assert restored == %{"sort" => "-code"}
+    end
+
+    test "restores the page together with the filters it was paged under" do
+      assert {:ok, restored} =
+               StateStorage.restore(
+                 %{},
+                 stored(%{}, %{"zone" => "B-12", "page" => "3"}),
+                 ["zone"]
+               )
+
+      assert restored == %{"zone" => "B-12", "page" => "3"}
+    end
+
+    test "a filter in the URL blocks the stored page along with the stored filters" do
+      # Same group, so it goes all or nothing: a link carrying one filter must
+      # not pick up a page number belonging to a different query.
+      assert {:ok, restored} =
+               StateStorage.restore(
+                 %{"zone" => "A-01"},
+                 stored(%{"sort" => "-code"}, %{"zone" => "B-12", "page" => "3"}),
+                 ["zone"]
+               )
+
+      assert restored == %{"sort" => "-code"}
     end
   end
 
@@ -196,10 +233,9 @@ defmodule Cinder.StateStorageTest do
                "sort" => "-code",
                "page_size" => "50",
                "search" => "widget",
-               "zone" => "B-12"
+               "zone" => "B-12",
+               "page" => "4"
              }
-
-      refute Map.has_key?(restored, "page")
     end
   end
 end
