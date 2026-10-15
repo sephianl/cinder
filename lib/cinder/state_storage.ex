@@ -18,8 +18,15 @@ defmodule Cinder.StateStorage do
     invisible *in its effect*: the rows it removed leave no trace, and that cost
     does not decay with time. So these last only as long as the tab —
     `sessionStorage`.
-  * **The page number and keyset cursors are kept nowhere.** Returning someone
-    to page 7 of a list they last saw a week ago is never what they wanted.
+  * **The page number travels with the filters**, in `sessionStorage`. It is the
+    same kind of state: "what am I looking at right now", and it subtracts in
+    the same way — page 3 hides pages 1 and 2. Being in the session group also
+    gives it the behaviour that makes it safe: any filter or search change
+    resets it to 1, so a remembered page can never outlive the query that
+    produced it.
+  * **Keyset cursors are kept nowhere.** A cursor is a position in one
+    particular ordering of one particular result set, and means nothing once
+    either changes.
 
   Companion to `Cinder.ColumnPreferences` and `Cinder.FilterPreferences`, which
   persist table *layout* through the same hook mechanism. This module handles
@@ -33,7 +40,7 @@ defmodule Cinder.StateStorage do
   @version 1
 
   @durable_keys ~w(sort page_size)
-  @search_key "search"
+  @session_keys ~w(search page)
   @filter_fields_key "_filter_fields"
 
   @type store :: :durable | :session
@@ -50,7 +57,7 @@ defmodule Cinder.StateStorage do
   @doc "Keys kept for the life of the tab, in `sessionStorage`."
   @spec session_keys([String.t()]) :: [String.t()]
   def session_keys(filter_fields) when is_list(filter_fields),
-    do: [@search_key | filter_fields]
+    do: @session_keys ++ filter_fields
 
   @doc """
   Splits an encoded table state into the payload for each store.
@@ -58,7 +65,7 @@ defmodule Cinder.StateStorage do
   Takes the atom-keyed map `Cinder.UrlManager.encode_state/1` produces and
   returns string-keyed, version-stamped payloads ready to be written to
   `localStorage` and `sessionStorage`. Anything belonging to neither store — the
-  page number, keyset cursors, the `_filter_fields` metadata — is dropped.
+  keyset cursors, the `_filter_fields` metadata — is dropped.
 
   Both payloads are always present, so a cleared filter or sort overwrites what
   was stored rather than leaving the old value to be restored next visit.
@@ -79,11 +86,16 @@ defmodule Cinder.StateStorage do
 
   Precedence is **URL > stored > declared default**, applied per *group* rather
   than per key. The groups are the two stores: the view (sort, page size) and the
-  query (filters, search). When the URL already carries anything from a group,
-  that whole group comes from the URL and none of it is restored — so a shared
-  link carrying one filter never silently picks up three more from the reader's
-  own storage, and a link carrying only a sort still restores the reader's
-  session filters.
+  query (filters, search, page). When the URL already carries anything from a
+  group, that whole group comes from the URL and none of it is restored — so a
+  shared link carrying one filter never silently picks up three more from the
+  reader's own storage, and a link carrying only a sort still restores the
+  reader's session filters.
+
+  The page sits in the query group on purpose. A link to page 3 describes a
+  position in the list its sender was looking at, so restoring the reader's own
+  filters underneath it would renumber the pages and show rows the sender never
+  saw.
 
   `filter_fields` is the set of filters the table currently manages, so a stored
   value for a column that has since been renamed or removed is ignored rather

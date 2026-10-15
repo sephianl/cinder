@@ -37,6 +37,31 @@ defmodule Cinder.Integration.StatePersistenceTest do
     end)
   end
 
+  # One album per page, so the three in the setup span three pages and a
+  # remembered page number has somewhere to land.
+  defp paged_album_collection(assigns) do
+    ~H"""
+    <Cinder.collection
+      id={@table_id}
+      resource={Cinder.Integration.Album}
+      url_state={@url_state}
+      persist_state?={true}
+      page_size={1}
+      empty_message="No albums found"
+    >
+      <:col :let={album} field="title" filter sort search>{album.title}</:col>
+      <:col :let={album} field="genre" filter={:select} sort>{album.genre}</:col>
+    </Cinder.collection>
+    """
+  end
+
+  defp paged_path do
+    Cinder.TestLive.Fixture.register(fn assigns ->
+      assigns = Phoenix.Component.assign(assigns, :table_id, @table_id)
+      paged_album_collection(assigns)
+    end)
+  end
+
   defp stored(opts) do
     %{
       "durable" => %{
@@ -256,6 +281,66 @@ defmodule Cinder.Integration.StatePersistenceTest do
 
       assert html =~ "No albums found"
       refute html =~ "No results match the current filters"
+    end
+  end
+
+  describe "the page number" do
+    test "a stored page is restored and lands in the URL", %{conn: conn} do
+      {:ok, view, _html} = live(conn, paged_path())
+
+      hydrate(view, stored(session: %{"page" => "3", "sort" => "title"}))
+
+      assert_patched_with(view, "page=3")
+    end
+
+    test "is written to the session store, never the durable one", %{conn: conn} do
+      {:ok, view, _html} = live(conn, paged_path())
+      hydrate(view, stored([]))
+
+      view |> element(~s|[phx-click="goto_page"][title="Go to page 2"]|) |> render_click()
+
+      assert_push_event(view, "cinder:table_state_changed", payload)
+      assert payload["session"]["params"]["page"] == "2"
+      refute Map.has_key?(payload["durable"]["params"], "page")
+    end
+
+    test "a filter change resets it, so a remembered page cannot outlive its query",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, paged_path())
+      hydrate(view, stored(session: %{"page" => "3"}))
+
+      # The page really was restored, so the reset below has something to undo.
+      assert_patched_with(view, "page=3")
+
+      view
+      |> form(~s|[phx-change="filter_change"]|, %{"filters" => %{"genre" => "rock"}})
+      |> render_change()
+
+      assert_push_event(view, "cinder:table_state_changed", payload)
+      assert payload["session"]["params"]["genre"] == "rock"
+      refute Map.has_key?(payload["session"]["params"], "page")
+    end
+
+    test "a reset clears it along with the filters", %{conn: conn} do
+      {:ok, view, _html} = live(conn, paged_path())
+      hydrate(view, stored(session: %{"genre" => "rock", "page" => "2"}))
+
+      view |> element("[phx-click=clear_all_filters]") |> render_click()
+
+      assert_push_event(view, "cinder:table_state_changed", payload)
+      assert payload["session"]["params"] == %{}
+    end
+
+    test "a page in the URL is not displaced by a stored one", %{conn: conn} do
+      {:ok, view, _html} = live(conn, paged_path() <> "?page=2")
+
+      hydrate(view, stored(session: %{"page" => "3"}))
+
+      # The URL speaks for the whole query group, so the stored page is ignored
+      # and the table stays where the link pointed. Asserted on the current-page
+      # marker rather than the total, which other tests in this file move.
+      assert has_element?(view, "[data-key=pagination_current_class]", "2")
+      refute has_element?(view, "[data-key=pagination_current_class]", "3")
     end
   end
 
