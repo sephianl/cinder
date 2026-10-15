@@ -1009,6 +1009,7 @@ defmodule Cinder.LiveComponent do
     |> assign(:page, page)
     # Update keyset cursors for navigation (only read in keyset mode)
     |> update_keyset_cursors(page)
+    |> clamp_page(page)
   end
 
   defp handle_result({:error, error}, socket) do
@@ -1068,6 +1069,40 @@ defmodule Cinder.LiveComponent do
     |> assign(:first_keyset, first_keyset)
     |> assign(:last_keyset, last_keyset)
   end
+
+  # A page past the end of the data is a dead end that explains nothing: an empty
+  # table reading "Page 7 of 2", with the page itself — not a filter — as the
+  # reason, and no empty-state message able to say so. It is reachable whenever a
+  # page number outlives the rows it was counted against: a remembered page in a
+  # tab someone else deleted rows from, a stale bookmark, a hand-edited `?page=`.
+  #
+  # Rather than describe the state, remove it — pull back to the last page that
+  # has rows. The URL and the stored state are corrected too, or the next visit
+  # restores the same out-of-range page and pays for the same wasted query again.
+  defp clamp_page(socket, %Ash.Page.Offset{} = page) do
+    with {:ok, last} <- last_page(page),
+         true <- socket.assigns.current_page > last do
+      socket
+      |> assign(:current_page, last)
+      |> persist_state(nil)
+      |> request_corrected_url()
+      |> load_data()
+    else
+      _ -> socket
+    end
+  end
+
+  defp clamp_page(socket, _page), do: socket
+
+  # `:unknown` when the action cannot count. `count: true` is always asked for,
+  # but a resource may refuse it, and a nil count is no evidence of being past
+  # the end — clamping on it would strand every table on page 1.
+  defp last_page(%Ash.Page.Offset{count: count, limit: limit})
+       when is_integer(count) and is_integer(limit) and limit > 0 do
+    {:ok, max(ceil(count / limit), 1)}
+  end
+
+  defp last_page(_page), do: :unknown
 
   defp get_keyset_from_result(nil), do: nil
 
@@ -1354,7 +1389,7 @@ defmodule Cinder.LiveComponent do
         socket
         |> decode_url_state(%{url_raw_params: Map.merge(url_params, restored)})
         |> load_data()
-        |> request_restored_url()
+        |> request_corrected_url()
 
       # The data is already loaded from the URL, and nothing was restored to
       # change it — opening the gate is the whole job.
@@ -1363,11 +1398,12 @@ defmodule Cinder.LiveComponent do
     end
   end
 
-  # Restoring is not a navigation the reader performed, so the URL it produces
-  # replaces the current history entry instead of adding one — otherwise Back
-  # would land on the same page shorn of its filters. The parent LiveView owns
-  # the URL, so it does the patching; `Cinder.UrlSync` injects the handler.
-  defp request_restored_url(socket) do
+  # Neither restoring nor clamping is a navigation the reader performed, so the
+  # URL either produces replaces the current history entry instead of adding one
+  # — otherwise Back would land on the same page shorn of its filters, or on the
+  # out-of-range page just corrected. The parent LiveView owns the URL, so it
+  # does the patching; `Cinder.UrlSync` injects the handler.
+  defp request_corrected_url(socket) do
     if socket.assigns[:on_state_change] do
       send(self(), {:cinder_restore_url, socket.assigns.id, encoded_state(socket, nil)})
     end

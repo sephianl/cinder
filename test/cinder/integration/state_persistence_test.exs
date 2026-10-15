@@ -43,7 +43,7 @@ defmodule Cinder.Integration.StatePersistenceTest do
     ~H"""
     <Cinder.collection
       id={@table_id}
-      resource={Cinder.Integration.Album}
+      resource={Music.Album}
       url_state={@url_state}
       persist_state?={true}
       page_size={1}
@@ -329,6 +329,28 @@ defmodule Cinder.Integration.StatePersistenceTest do
 
       assert_push_event(view, "cinder:table_state_changed", payload)
       assert payload["session"]["params"] == %{}
+    end
+
+    test "a restored page past the end of the data corrects the store, not just the view",
+         %{conn: conn} do
+      # Otherwise the out-of-range page stays stored and every later visit pays
+      # for the same clamp, and the same wasted query, again.
+      {:ok, view, _html} = live(conn, paged_path())
+
+      hydrate(view, stored(session: %{"page" => "99"}))
+
+      assert_push_event(view, "cinder:table_state_changed", payload)
+
+      # What is stored has to match what the reader is actually looking at.
+      shown =
+        view
+        |> element("[data-key=pagination_current_class]")
+        |> render()
+        |> String.replace(~r/<[^>]*>/, "")
+        |> String.trim()
+
+      refute shown == "99"
+      assert Map.get(payload["session"]["params"], "page", "1") == shown
     end
 
     test "a page in the URL is not displaced by a stored one", %{conn: conn} do
