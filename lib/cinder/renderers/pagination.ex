@@ -304,7 +304,7 @@ defmodule Cinder.Renderers.Pagination do
         </button>
         <div
           id={@dropdown_id}
-          class={["absolute top-full right-0 mt-1 z-50 hidden", @theme.page_size_dropdown_container_class]}
+          class={["absolute bottom-full right-0 mb-1 z-50 hidden", @theme.page_size_dropdown_container_class]}
           data-key="page_size_dropdown_container_class"
           phx-click-away={JS.hide(to: "##{@dropdown_id}")}
         >
