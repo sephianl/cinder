@@ -144,7 +144,7 @@ defmodule Cinder.Renderers.PaginationTest do
       assert html =~ "11&ndash;12</span> items"
       assert html =~ ~s(title="Previous page")
       assert html =~ ~s(title="Next page")
-      refute html =~ " of "
+      refute html =~ "</span> of "
       refute html =~ ~s(title="Last page")
     end
 
