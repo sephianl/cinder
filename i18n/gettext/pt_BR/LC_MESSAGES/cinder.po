@@ -20,16 +20,6 @@ msgid_plural "active"
 msgstr[0] "ativo"
 msgstr[1] "ativos"
 
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "Page %{current} of %{total}"
-msgstr "Página %{current} de %{total}"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "showing %{start}-%{end} of %{total}"
-msgstr "mostrando %{start}-%{end} de %{total}"
-
 #: lib/cinder/filters/date_range.ex
 #: lib/cinder/filters/number_range.ex
 #, elixir-autogen
@@ -48,16 +38,6 @@ msgstr "Página anterior"
 
 #: lib/cinder/renderers/pagination.ex
 #, elixir-autogen
-msgid "First page"
-msgstr "Primeira página"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "Last page"
-msgstr "Última página"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
 msgid "Go to page %{page}"
 msgstr "Ir para página %{page}"
 
@@ -70,11 +50,6 @@ msgstr "%{total} itens"
 #, elixir-autogen, elixir-format
 msgid "Next"
 msgstr "Próximo"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen, elixir-format
-msgid "Prev"
-msgstr "Anterior"
 
 #: lib/cinder/collection.ex
 #, elixir-autogen, elixir-format
@@ -231,3 +206,13 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "No results match the current filters."
 msgstr ""
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Previous"
+msgstr "Anterior"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Showing {range} of %{total} items"
+msgstr "Mostrando {range} de %{total} itens"

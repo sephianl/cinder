@@ -23,16 +23,6 @@ msgid_plural "active"
 msgstr[0] "actief"
 msgstr[1] "actief"
 
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "Page %{current} of %{total}"
-msgstr "Pagina %{current} van %{total}"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "showing %{start}-%{end} of %{total}"
-msgstr "toont %{start}-%{end} van %{total}"
-
 #: lib/cinder/filters/date_range.ex
 #: lib/cinder/filters/number_range.ex
 #, elixir-autogen
@@ -51,16 +41,6 @@ msgstr "Vorige pagina"
 
 #: lib/cinder/renderers/pagination.ex
 #, elixir-autogen
-msgid "First page"
-msgstr "Eerste pagina"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "Last page"
-msgstr "Laatste pagina"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
 msgid "Go to page %{page}"
 msgstr "Ga naar pagina %{page}"
 
@@ -72,12 +52,7 @@ msgstr ""
 #: lib/cinder/renderers/pagination.ex
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Next"
-msgstr "Volgende pagina"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen, elixir-format
-msgid "Prev"
-msgstr "Vorige"
+msgstr "Volgende"
 
 #: lib/cinder/collection.ex
 #, elixir-autogen, elixir-format
@@ -234,3 +209,13 @@ msgstr "Filters aanpassen"
 #, elixir-autogen, elixir-format
 msgid "No results match the current filters."
 msgstr "Geen resultaten voor de huidige filters."
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Previous"
+msgstr "Vorige"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Showing {range} of %{total} items"
+msgstr "Toont {range} van %{total} items"

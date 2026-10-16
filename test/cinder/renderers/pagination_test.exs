@@ -12,7 +12,9 @@ defmodule Cinder.Renderers.PaginationTest do
       pagination_count_class: "pagination-count",
       pagination_nav_class: "pagination-nav",
       pagination_button_class: "pagination-button",
+      pagination_step_class: "pagination-step",
       pagination_current_class: "pagination-current",
+      pagination_ellipsis_class: "pagination-ellipsis",
       page_size_container_class: "page-size-container",
       page_size_label_class: "page-size-label",
       page_size_dropdown_class: "page-size-dropdown",
@@ -43,6 +45,52 @@ defmodule Cinder.Renderers.PaginationTest do
       show_pagination: true,
       pagination_mode: :offset
     }
+  end
+
+  defp offset_assigns(page_number, total_count, limit) do
+    base_assigns("my-table")
+    |> Map.put(:page, %Ash.Page.Offset{
+      results: Enum.to_list(1..limit),
+      count: total_count,
+      offset: (page_number - 1) * limit,
+      limit: limit,
+      more?: true
+    })
+  end
+
+  describe "offset page range" do
+    test "shows every page when they all fit" do
+      html = render_component(&Pagination.render/1, offset_assigns(1, 70, 10))
+
+      for page <- 1..7, do: assert(html =~ ~s(phx-value-page="#{page}") or html =~ ">#{page}<")
+      refute html =~ "pagination-ellipsis"
+    end
+
+    test "keeps the first and last page reachable, with an ellipsis for the gap" do
+      html = render_component(&Pagination.render/1, offset_assigns(10, 500, 10))
+
+      assert html =~ ~s(phx-value-page="1")
+      assert html =~ ~s(phx-value-page="50")
+      assert html =~ "pagination-ellipsis"
+      # The window sits around the current page, not at the start
+      assert html =~ ~s(phx-value-page="9")
+      assert html =~ ~s(phx-value-page="11")
+      refute html =~ ~s(phx-value-page="25")
+    end
+
+    test "marks the current page for assistive tech and does not link it" do
+      html = render_component(&Pagination.render/1, offset_assigns(3, 500, 10))
+
+      assert html =~ ~s(aria-current="page")
+      refute html =~ ~s(phx-value-page="3")
+    end
+
+    test "disables rather than hides prev and next at the ends" do
+      first = render_component(&Pagination.render/1, offset_assigns(1, 500, 10))
+      assert first =~ "disabled"
+      assert first =~ "Previous"
+      assert first =~ "Next"
+    end
   end
 
   describe "page size dropdown IDs" do

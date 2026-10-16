@@ -68,9 +68,17 @@ defmodule Cinder.Renderers.Pagination do
     end_index = min(page.offset + length(page.results), page.count)
     page_range = build_page_range(page_number, total_pages)
 
+    # Split on {range} so the range keeps the count class while the sentence
+    # stays one translatable string (same trick as the page size selector).
+    [info_before, info_after] =
+      dgettext("cinder", "Showing {range} of %{total} items", total: page.count)
+      |> String.split("{range}")
+
     assigns =
       assigns
       |> assign(:page_range, page_range)
+      |> assign(:info_before, info_before)
+      |> assign(:info_after, info_after)
       |> assign(:page_number, page_number)
       |> assign(:total_pages, total_pages)
       |> assign(:start_index, if(page.count > 0, do: start_index, else: 0))
@@ -82,89 +90,77 @@ defmodule Cinder.Renderers.Pagination do
     ~H"""
     <div class={@theme.pagination_wrapper_class} data-key="pagination_wrapper_class">
       <div class={@theme.pagination_container_class} data-key="pagination_container_class">
-      <!-- Left side: Page info -->
-      <div class={@theme.pagination_info_class} data-key="pagination_info_class">
-        {dgettext("cinder", "Page %{current} of %{total}", current: @page_number, total: @total_pages)}
-        <span class={@theme.pagination_count_class} data-key="pagination_count_class">
-          ({dgettext("cinder", "showing %{start}-%{end} of %{total}", start: @start_index, end: @end_index, total: @total_count)})
-        </span>
-      </div>
+      <!-- Left side: what you are looking at, and how much of it per page -->
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div class={@theme.pagination_info_class} data-key="pagination_info_class">
+          {@info_before}<span class={@theme.pagination_count_class} data-key="pagination_count_class">{@start_index}&ndash;{@end_index}</span>{@info_after}
+        </div>
 
-      <!-- Right side: Page size selector and navigation -->
-      <div class="flex items-center space-x-6">
-        <!-- Page size selector (if configurable) -->
         <div :if={@page_size_config.configurable} class={@theme.page_size_container_class} data-key="page_size_container_class">
           <.page_size_selector page_size_config={@page_size_config} theme={@theme} myself={@myself} id={@id} />
         </div>
+      </div>
 
+      <!-- Right side: where you are in it -->
+      <div>
         <!-- Page navigation -->
+        <%!-- First and last page are always in the range, so this needs no
+             jump-to-end buttons: Prev/Next, the numbers, and an ellipsis
+             wherever the range skips. --%>
         <div class={@theme.pagination_nav_class} data-key="pagination_nav_class">
-          <!-- First page and previous -->
           <button
-            :if={@page_number > 2}
             phx-click="goto_page"
-            phx-value-page="1"
+            phx-value-page={max(@page_number - 1, 1)}
             phx-target={@myself}
-            class={@theme.pagination_button_class}
-            data-key="pagination_button_class"
-            title={dgettext("cinder", "First page")}
-          >
-            &laquo;
-          </button>
-
-          <button
-            :if={@has_prev}
-            phx-click="goto_page"
-            phx-value-page={@page_number - 1}
-            phx-target={@myself}
-            class={@theme.pagination_button_class}
-            data-key="pagination_button_class"
+            class={@theme.pagination_step_class}
+            data-key="pagination_step_class"
+            disabled={!@has_prev}
             title={dgettext("cinder", "Previous page")}
           >
-            &lsaquo;
+            &lsaquo; {dgettext("cinder", "Previous")}
           </button>
 
           <!-- Page numbers -->
-          <span :for={page <- @page_range} class="inline-flex">
+          <span :for={entry <- @page_range} class="inline-flex">
+            <span
+              :if={entry == :ellipsis}
+              class={@theme.pagination_ellipsis_class}
+              data-key="pagination_ellipsis_class"
+              aria-hidden="true"
+            >
+              &hellip;
+            </span>
+            <span
+              :if={entry == @page_number}
+              class={@theme.pagination_current_class}
+              data-key="pagination_current_class"
+              aria-current="page"
+            >
+              {entry}
+            </span>
             <button
-              :if={page != @page_number}
+              :if={entry != :ellipsis and entry != @page_number}
               phx-click="goto_page"
-              phx-value-page={page}
+              phx-value-page={entry}
               phx-target={@myself}
               class={@theme.pagination_button_class}
               data-key="pagination_button_class"
-              title={dgettext("cinder", "Go to page %{page}", %{page: page})}
+              title={dgettext("cinder", "Go to page %{page}", %{page: entry})}
             >
-              {page}
+              {entry}
             </button>
-            <span :if={page == @page_number} class={@theme.pagination_current_class} data-key="pagination_current_class">
-              {page}
-            </span>
           </span>
 
-          <!-- Next and last page -->
           <button
-            :if={@has_next}
             phx-click="goto_page"
-            phx-value-page={@page_number + 1}
+            phx-value-page={min(@page_number + 1, @total_pages)}
             phx-target={@myself}
-            class={@theme.pagination_button_class}
-            data-key="pagination_button_class"
+            class={@theme.pagination_step_class}
+            data-key="pagination_step_class"
+            disabled={!@has_next}
             title={dgettext("cinder", "Next page")}
           >
-            &rsaquo;
-          </button>
-
-          <button
-            :if={@page_number < @total_pages - 1}
-            phx-click="goto_page"
-            phx-value-page={@total_pages}
-            phx-target={@myself}
-            class={@theme.pagination_button_class}
-            data-key="pagination_button_class"
-            title={dgettext("cinder", "Last page")}
-          >
-            &raquo;
+            {dgettext("cinder", "Next")} &rsaquo;
           </button>
         </div>
       </div>
@@ -196,38 +192,39 @@ defmodule Cinder.Renderers.Pagination do
     ~H"""
     <div class={@theme.pagination_wrapper_class} data-key="pagination_wrapper_class">
       <div class={@theme.pagination_container_class} data-key="pagination_container_class">
-      <!-- Left side: Count info -->
-      <div class={@theme.pagination_info_class} data-key="pagination_info_class">
-        {dgettext("cinder", "%{total} items", total: @total_count)}
-      </div>
+      <!-- Left side: what you are looking at, and how much of it per page -->
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div class={@theme.pagination_info_class} data-key="pagination_info_class">
+          {dgettext("cinder", "%{total} items", total: @total_count)}
+        </div>
 
-      <!-- Right side: Page size selector and navigation -->
-      <div class="flex items-center space-x-6">
-        <!-- Page size selector (if configurable) -->
         <div :if={@page_size_config.configurable} class={@theme.page_size_container_class} data-key="page_size_container_class">
           <.page_size_selector page_size_config={@page_size_config} theme={@theme} myself={@myself} id={@id} />
         </div>
+      </div>
 
+      <!-- Right side: where you are in it -->
+      <div>
         <!-- Keyset navigation: Prev / Next only -->
         <div class={@theme.pagination_nav_class} data-key="pagination_nav_class">
           <!-- Previous page -->
           <button
             phx-click="prev_page"
             phx-target={@myself}
-            class={@theme.pagination_button_class}
-            data-key="pagination_button_class"
+            class={@theme.pagination_step_class}
+            data-key="pagination_step_class"
             disabled={!@has_prev}
             title={dgettext("cinder", "Previous page")}
           >
-            &lsaquo; {dgettext("cinder", "Prev")}
+            &lsaquo; {dgettext("cinder", "Previous")}
           </button>
 
           <!-- Next page -->
           <button
             phx-click="next_page"
             phx-target={@myself}
-            class={@theme.pagination_button_class}
-            data-key="pagination_button_class"
+            class={@theme.pagination_step_class}
+            data-key="pagination_step_class"
             disabled={!@has_next}
             title={dgettext("cinder", "Next page")}
           >
@@ -274,7 +271,7 @@ defmodule Cinder.Renderers.Pagination do
         </button>
         <div
           id={@dropdown_id}
-          class={["absolute top-full right-0 mt-1 z-50 hidden", @theme.page_size_dropdown_container_class]}
+          class={["absolute bottom-full left-0 mb-1 z-50 hidden", @theme.page_size_dropdown_container_class]}
           data-key="page_size_dropdown_container_class"
           phx-click-away={JS.hide(to: "##{@dropdown_id}")}
         >
@@ -301,16 +298,19 @@ defmodule Cinder.Renderers.Pagination do
     """
   end
 
-  defp build_page_range(current_page, total_pages) do
-    range_start = max(1, current_page - 2)
-    range_end = min(total_pages, current_page + 2)
+  # Page one and the last page are always reachable; `:ellipsis` marks a gap the
+  # range skips. At most seven slots, so the nav never grows with the dataset.
+  defp build_page_range(_current_page, total_pages) when total_pages <= 7,
+    do: Enum.to_list(1..max(total_pages, 1))
 
-    if range_start <= range_end do
-      Enum.to_list(range_start..range_end)
-    else
-      [1]
-    end
-  end
+  defp build_page_range(current_page, total_pages) when current_page <= 3,
+    do: [1, 2, 3, :ellipsis, total_pages]
+
+  defp build_page_range(current_page, total_pages) when current_page >= total_pages - 2,
+    do: [1, :ellipsis, total_pages - 2, total_pages - 1, total_pages]
+
+  defp build_page_range(current_page, total_pages),
+    do: [1, :ellipsis, current_page - 1, current_page, current_page + 1, :ellipsis, total_pages]
 
   # Check if there's a previous page in keyset mode.
   # - If we used `after` cursor (forward navigation): there's always a previous page
