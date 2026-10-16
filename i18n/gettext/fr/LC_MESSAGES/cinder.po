@@ -20,16 +20,6 @@ msgid_plural "active"
 msgstr[0] "actif"
 msgstr[1] "actifs"
 
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "Page %{current} of %{total}"
-msgstr "Page %{current} sur %{total}"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "showing %{start}-%{end} of %{total}"
-msgstr "affichage de %{start}-%{end} sur %{total}"
-
 #: lib/cinder/filters/date_range.ex
 #: lib/cinder/filters/number_range.ex
 #, elixir-autogen
@@ -48,16 +38,6 @@ msgstr "Page précédente"
 
 #: lib/cinder/renderers/pagination.ex
 #, elixir-autogen
-msgid "First page"
-msgstr "Première page"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "Last page"
-msgstr "Dernière page"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
 msgid "Go to page %{page}"
 msgstr "Aller à la page %{page}"
 
@@ -70,11 +50,6 @@ msgstr "%{total} éléments"
 #, elixir-autogen, elixir-format
 msgid "Next"
 msgstr "Suivant"
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen, elixir-format
-msgid "Prev"
-msgstr "Précédent"
 
 #: lib/cinder/collection.ex
 #, elixir-autogen, elixir-format
@@ -191,11 +166,6 @@ msgstr "Tapez pour rechercher plus d'options..."
 msgid "An error occurred while loading data"
 msgstr "Une erreur s'est produite lors du chargement des données"
 
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen, elixir-format
-msgid "Page %{current}"
-msgstr "Page %{current}"
-
 #: lib/cinder/renderers/prefs_drawer.ex
 #, elixir-autogen, elixir-format
 msgid "Close"
@@ -217,6 +187,7 @@ msgid "Edit columns"
 msgstr ""
 
 #: lib/cinder/controls.ex
+#: lib/cinder/renderers/helpers.ex
 #, elixir-autogen, elixir-format
 msgid "Reset filters"
 msgstr ""
@@ -229,4 +200,24 @@ msgstr ""
 #: lib/cinder/renderers/filter_prefs.ex
 #, elixir-autogen, elixir-format
 msgid "Edit filters"
+msgstr ""
+
+#: lib/cinder/renderers/helpers.ex
+#, elixir-autogen, elixir-format
+msgid "No results match the current filters."
+msgstr ""
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Previous"
+msgstr "Page précédente"
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Showing {range} of %{total} items"
+msgstr ""
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Showing {range} items"
 msgstr ""

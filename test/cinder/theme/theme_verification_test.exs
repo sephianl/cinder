@@ -31,10 +31,12 @@ defmodule Cinder.ThemeVerificationTest do
     :pagination_wrapper_class,
     :pagination_container_class,
     :pagination_button_class,
+    :pagination_step_class,
     :pagination_info_class,
     :pagination_count_class,
     :pagination_nav_class,
-    :pagination_current_class
+    :pagination_current_class,
+    :pagination_ellipsis_class
   ]
 
   @required_column_prefs_properties [

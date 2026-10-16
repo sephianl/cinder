@@ -101,10 +101,17 @@ defmodule Cinder.Themes.DaisyUI do
   set :pagination_count_class, "text-base-content/50 text-xs ml-2"
   set :pagination_nav_class, "flex items-center space-x-1"
   set :pagination_button_class, "btn btn-sm bg-base-100"
+
+  set :pagination_step_class,
+      "btn btn-sm bg-base-100"
+
   set :pagination_current_class, "btn btn-primary btn-sm"
   set :page_size_container_class, "flex items-center space-x-2"
   set :page_size_label_class, "text-base-content/70 text-sm"
   set :page_size_dropdown_class, "btn btn-sm btn-outline flex items-center cursor-pointer"
+
+  set :pagination_ellipsis_class,
+      "px-2 text-sm opacity-60"
 
   set :page_size_dropdown_container_class,
       "bg-base-100 border border-base-300 rounded-box shadow-lg"

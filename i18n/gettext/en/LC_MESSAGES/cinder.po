@@ -23,16 +23,6 @@ msgid_plural "active"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "Page %{current} of %{total}"
-msgstr ""
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "showing %{start}-%{end} of %{total}"
-msgstr ""
-
 #: lib/cinder/filters/date_range.ex
 #: lib/cinder/filters/number_range.ex
 #, elixir-autogen
@@ -51,16 +41,6 @@ msgstr ""
 
 #: lib/cinder/renderers/pagination.ex
 #, elixir-autogen
-msgid "First page"
-msgstr ""
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
-msgid "Last page"
-msgstr ""
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen
 msgid "Go to page %{page}"
 msgstr ""
 
@@ -72,11 +52,6 @@ msgstr ""
 #: lib/cinder/renderers/pagination.ex
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Next"
-msgstr ""
-
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen, elixir-format
-msgid "Prev"
 msgstr ""
 
 #: lib/cinder/collection.ex
@@ -194,11 +169,6 @@ msgstr ""
 msgid "An error occurred while loading data"
 msgstr ""
 
-#: lib/cinder/renderers/pagination.ex
-#, elixir-autogen, elixir-format
-msgid "Page %{current}"
-msgstr "Page %{current}"
-
 #: lib/cinder/renderers/prefs_drawer.ex
 #, elixir-autogen, elixir-format
 msgid "Close"
@@ -238,4 +208,19 @@ msgstr ""
 #: lib/cinder/renderers/helpers.ex
 #, elixir-autogen, elixir-format
 msgid "No results match the current filters."
+msgstr ""
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Previous"
+msgstr ""
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Showing {range} of %{total} items"
+msgstr ""
+
+#: lib/cinder/renderers/pagination.ex
+#, elixir-autogen, elixir-format
+msgid "Showing {range} items"
 msgstr ""

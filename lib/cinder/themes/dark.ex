@@ -144,8 +144,14 @@ defmodule Cinder.Themes.Dark do
   set :pagination_button_class,
       "px-3 py-1 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded hover:bg-gray-700 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
 
+  set :pagination_step_class,
+      "px-3 py-1 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-600 rounded hover:bg-gray-700 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+
   set :pagination_current_class,
       "px-3 py-1 text-sm font-medium text-black bg-purple-400 border border-purple-400 rounded"
+
+  set :pagination_ellipsis_class,
+      "px-2 py-1 text-sm text-gray-500"
 
   set :page_size_container_class, "flex items-center space-x-2"
   set :page_size_label_class, "text-sm text-gray-300 font-medium"
