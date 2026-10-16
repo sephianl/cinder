@@ -90,18 +90,19 @@ defmodule Cinder.Renderers.Pagination do
     ~H"""
     <div class={@theme.pagination_wrapper_class} data-key="pagination_wrapper_class">
       <div class={@theme.pagination_container_class} data-key="pagination_container_class">
-      <!-- Left side: Page info -->
-      <div class={@theme.pagination_info_class} data-key="pagination_info_class">
-        {@info_before}<span class={@theme.pagination_count_class} data-key="pagination_count_class">{@start_index}&ndash;{@end_index}</span>{@info_after}
-      </div>
+      <!-- Left side: what you are looking at, and how much of it per page -->
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div class={@theme.pagination_info_class} data-key="pagination_info_class">
+          {@info_before}<span class={@theme.pagination_count_class} data-key="pagination_count_class">{@start_index}&ndash;{@end_index}</span>{@info_after}
+        </div>
 
-      <!-- Right side: Page size selector and navigation -->
-      <div class="flex items-center space-x-6">
-        <!-- Page size selector (if configurable) -->
         <div :if={@page_size_config.configurable} class={@theme.page_size_container_class} data-key="page_size_container_class">
           <.page_size_selector page_size_config={@page_size_config} theme={@theme} myself={@myself} id={@id} />
         </div>
+      </div>
 
+      <!-- Right side: where you are in it -->
+      <div>
         <!-- Page navigation -->
         <%!-- First and last page are always in the range, so this needs no
              jump-to-end buttons: Prev/Next, the numbers, and an ellipsis
@@ -191,18 +192,19 @@ defmodule Cinder.Renderers.Pagination do
     ~H"""
     <div class={@theme.pagination_wrapper_class} data-key="pagination_wrapper_class">
       <div class={@theme.pagination_container_class} data-key="pagination_container_class">
-      <!-- Left side: Count info -->
-      <div class={@theme.pagination_info_class} data-key="pagination_info_class">
-        {dgettext("cinder", "%{total} items", total: @total_count)}
-      </div>
+      <!-- Left side: what you are looking at, and how much of it per page -->
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div class={@theme.pagination_info_class} data-key="pagination_info_class">
+          {dgettext("cinder", "%{total} items", total: @total_count)}
+        </div>
 
-      <!-- Right side: Page size selector and navigation -->
-      <div class="flex items-center space-x-6">
-        <!-- Page size selector (if configurable) -->
         <div :if={@page_size_config.configurable} class={@theme.page_size_container_class} data-key="page_size_container_class">
           <.page_size_selector page_size_config={@page_size_config} theme={@theme} myself={@myself} id={@id} />
         </div>
+      </div>
 
+      <!-- Right side: where you are in it -->
+      <div>
         <!-- Keyset navigation: Prev / Next only -->
         <div class={@theme.pagination_nav_class} data-key="pagination_nav_class">
           <!-- Previous page -->
@@ -269,7 +271,7 @@ defmodule Cinder.Renderers.Pagination do
         </button>
         <div
           id={@dropdown_id}
-          class={["absolute bottom-full right-0 mb-1 z-50 hidden", @theme.page_size_dropdown_container_class]}
+          class={["absolute bottom-full left-0 mb-1 z-50 hidden", @theme.page_size_dropdown_container_class]}
           data-key="page_size_dropdown_container_class"
           phx-click-away={JS.hide(to: "##{@dropdown_id}")}
         >
