@@ -12,6 +12,7 @@ defmodule Cinder.Renderers.Table do
   import Cinder.Renderers.Helpers
 
   alias Cinder.Renderers.BulkActions
+  alias Cinder.Renderers.ColumnPrefs
   alias Cinder.Renderers.Pagination
   alias Cinder.Renderers.SortIcon
 
@@ -25,7 +26,7 @@ defmodule Cinder.Renderers.Table do
       <div :if={@show_filters} class={@theme.controls_class} data-key="controls_class">
         <Cinder.FilterManager.render_filter_controls
           table_id={@id}
-          columns={Map.get(assigns, :query_columns, @columns)}
+          columns={Map.get(assigns, :filter_columns, @columns)}
           filters={@filters}
           theme={@theme}
           target={@myself}
@@ -37,8 +38,22 @@ defmodule Cinder.Renderers.Table do
           search_placeholder={@search_placeholder}
           raw_filter_params={Map.get(assigns, :raw_filter_params, %{})}
           controls_slot={Map.get(assigns, :controls_slot, [])}
+          filter_selector?={Map.get(assigns, :filter_selector?, false)}
+          shown_filters={Map.get(assigns, :shown_filters, MapSet.new())}
         />
       </div>
+
+      <!-- Column preferences (Edit columns) -->
+      <ColumnPrefs.render
+        id={@id}
+        myself={@myself}
+        theme={@theme}
+        enabled={Map.get(assigns, :column_preferences?, false)}
+        show_button={Map.get(assigns, :show_prefs, false)}
+        open?={Map.get(assigns, :column_prefs_drawer_open?, false)}
+        drawer_columns={Map.get(assigns, :prefs_drawer_columns, Map.get(assigns, :declared_columns, @columns))}
+        prefs={Map.get(assigns, :column_preferences, Cinder.ColumnPreferences.empty())}
+      />
 
       <!-- Bulk Actions -->
       <BulkActions.render
@@ -50,7 +65,10 @@ defmodule Cinder.Renderers.Table do
       />
 
       <!-- Main table -->
-      <div class={@theme.table_wrapper_class} data-key="table_wrapper_class">
+      <div class={[
+             @theme.table_wrapper_class,
+             prefs_hydration_class(assigns)
+           ]} data-key="table_wrapper_class">
         <table class={@theme.table_class} data-key="table_class">
           <thead class={@theme.thead_class} data-key="thead_class">
             <tr class={@theme.header_row_class} data-key="header_row_class">
@@ -65,28 +83,41 @@ defmodule Cinder.Renderers.Table do
                 />
               </th>
               <th :for={column <- @columns} class={[@theme.th_class, column.class]} data-key="th_class">
-                <div :if={column.sortable}
-                     class={["cursor-pointer select-none", (@loading && "opacity-75" || "")]}
-                     phx-click="toggle_sort"
-                     phx-value-key={column.field}
-                     phx-target={@myself}>
-                     {column.label}
-                     <span class={@theme.sort_indicator_class} data-key="sort_indicator_class">
-                       <SortIcon.sort_icon sort_direction={Cinder.QueryBuilder.get_sort_direction(@sort_by, column.field)} theme={@theme} loading={@loading} />
-                     </span>
-                </div>
-                <div :if={not column.sortable}>
-                  {column.label}
-                </div>
+                <.header_content
+                  variant={header_variant(column, @columns, assigns)}
+                  column={column}
+                  theme={@theme}
+                  myself={@myself}
+                  loading={@loading}
+                  sort_by={@sort_by}
+                  drawer_open?={Map.get(assigns, :column_prefs_drawer_open?, false)}
+                  trigger_slot={Map.get(assigns, :columns_trigger_slot, [])}
+                />
+              </th>
+              <th
+                :if={append_prefs_trigger?(assigns)}
+                class={[@theme.th_class, "w-10"]}
+                data-key="th_class"
+              >
+                <.header_content
+                  variant={:columns_trigger}
+                  column={%{field: nil}}
+                  theme={@theme}
+                  myself={@myself}
+                  loading={@loading}
+                  sort_by={@sort_by}
+                  drawer_open?={Map.get(assigns, :column_prefs_drawer_open?, false)}
+                  trigger_slot={Map.get(assigns, :columns_trigger_slot, [])}
+                />
               </th>
             </tr>
           </thead>
-          <tbody class={[@theme.tbody_class, (@loading && "opacity-75" || "")]} data-key="tbody_class">
+          <tbody class={[@theme.tbody_class, (@loading && @theme.loading_row_class || "")]} data-key="tbody_class">
             <tr :for={item <- @data} :if={not @error}
-                class={get_row_classes(@theme.row_class, @row_click, @selectable, @selected_ids, item, @id_field, @theme)}
+                class={get_row_classes(@theme.row_class, @row_click, @selectable, Map.get(assigns, :select_on_row_click, true), @selected_ids, item, @id_field, @theme)}
                 data-item-id={to_string(Map.get(item, @id_field))}
                 data-key="row_class"
-                phx-click={row_click_action(@row_click, @selectable, item, @id_field, @myself)}>
+                phx-click={row_click_action(@row_click, @selectable and Map.get(assigns, :select_on_row_click, true), item, @id_field, @myself)}>
               <td :if={@selectable} class={[@theme.td_class, "w-10"]} data-key="td_class">
                 <input
                   type="checkbox"
@@ -98,13 +129,14 @@ defmodule Cinder.Renderers.Table do
                   data-key="selection_checkbox_class"
                 />
               </td>
-              <td :for={column <- @columns} class={[@theme.td_class, column.class]} data-key="td_class">
+              <td :for={column <- @columns} class={[@theme.td_class, column.class, Map.get(column, :mask_class, "")]} data-key="td_class">
                 {render_slot(column.slot, item)}
               </td>
+              <td :if={append_prefs_trigger?(assigns)} class={@theme.td_class} data-key="td_class"></td>
             </tr>
             <!-- Error State -->
             <tr :if={@error and not @loading}>
-              <td colspan={column_count(@columns, @selectable)} class={@theme.empty_class} data-key="error_class">
+              <td colspan={column_count(@columns, @selectable) + trailing_count(assigns)} class={@theme.empty_class} data-key="error_class">
                 <%= if has_slot?(assigns, :error_slot) do %>
                   {render_slot(@error_slot)}
                 <% else %>
@@ -116,7 +148,7 @@ defmodule Cinder.Renderers.Table do
             </tr>
             <!-- Empty State (only when not loading and not error) -->
             <tr :if={@data == [] and not @loading and not @error}>
-              <td colspan={column_count(@columns, @selectable)} class={@theme.empty_class} data-key="empty_class">
+              <td colspan={column_count(@columns, @selectable) + trailing_count(assigns)} class={@theme.empty_class} data-key="empty_class">
                 <%= if has_slot?(assigns, :empty_slot) do %>
                   {render_slot(@empty_slot, empty_context(assigns))}
                 <% else %>
@@ -158,12 +190,86 @@ defmodule Cinder.Renderers.Table do
   end
 
   # ============================================================================
+  # HEADER CELL
+  # ============================================================================
+
+  attr :variant, :atom, required: true
+  attr :column, :map, required: true
+  attr :theme, :map, required: true
+  attr :myself, :any, required: true
+  attr :loading, :boolean, required: true
+  attr :sort_by, :any, required: true
+  attr :drawer_open?, :boolean, default: false
+  attr :trigger_slot, :list, default: []
+
+  defp header_content(%{variant: :columns_trigger, trigger_slot: []} = assigns) do
+    ~H"""
+    <div class="flex justify-end">
+      <button
+        type="button"
+        phx-click="toggle_column_prefs_drawer"
+        phx-target={@myself}
+        class={@theme.column_prefs_header_trigger_class}
+        data-key="column_prefs_header_trigger_class"
+        aria-haspopup="dialog"
+      >
+        <.columns_icon class={@theme.column_prefs_button_icon_class} />
+      </button>
+    </div>
+    """
+  end
+
+  defp header_content(%{variant: :columns_trigger} = assigns) do
+    ~H"""
+    {render_slot(@trigger_slot, %{
+      toggle: Phoenix.LiveView.JS.push("toggle_column_prefs_drawer", target: @myself),
+      open?: @drawer_open?
+    })}
+    """
+  end
+
+  defp header_content(%{variant: :sortable} = assigns) do
+    ~H"""
+    <div
+      class={["cursor-pointer select-none", (@loading && @theme.loading_row_class || "")]}
+      phx-click="toggle_sort"
+      phx-value-key={@column.field}
+      phx-target={@myself}
+    >
+      {@column.label}
+      <span class={@theme.sort_indicator_class} data-key="sort_indicator_class">
+        <SortIcon.sort_icon
+          sort_direction={Cinder.QueryBuilder.get_sort_direction(@sort_by, @column.field)}
+          theme={@theme}
+          loading={@loading}
+        />
+      </span>
+    </div>
+    """
+  end
+
+  defp header_content(%{variant: :plain} = assigns) do
+    ~H"""
+    <div>{@column.label}</div>
+    """
+  end
+
+  # ============================================================================
   # HELPER FUNCTIONS
   # ============================================================================
 
-  defp get_row_classes(base_classes, row_click, selectable, selected_ids, item, id_field, theme) do
-    # Add cursor-pointer if row is clickable (either via row_click or selectable without row_click)
-    clickable = row_click != nil or (selectable and row_click == nil)
+  defp get_row_classes(
+         base_classes,
+         row_click,
+         selectable,
+         select_on_row_click,
+         selected_ids,
+         item,
+         id_field,
+         theme
+       ) do
+    # Add cursor-pointer if row is clickable (either via row_click or selectable row-click without row_click)
+    clickable = row_click != nil or (selectable and select_on_row_click and row_click == nil)
     classes = if clickable, do: [base_classes, "cursor-pointer"], else: [base_classes]
 
     if selectable and item_selected?(selected_ids, item, id_field) do
@@ -194,6 +300,24 @@ defmodule Cinder.Renderers.Table do
 
   defp all_page_selected?(_selected_ids, _data, _id_field), do: false
 
+  defp prefs_hydration_class(%{column_preferences?: true, column_prefs_hydrated?: false}),
+    do: "invisible"
+
+  defp prefs_hydration_class(_assigns), do: ""
+
+  defp header_variant(column, columns, assigns) do
+    cond do
+      prefs_trigger?(column, columns, assigns) -> :columns_trigger
+      column.sortable -> :sortable
+      true -> :plain
+    end
+  end
+
+  defp prefs_trigger?(column, columns, assigns) do
+    Map.get(assigns, :column_preferences?, false) and Map.get(assigns, :header_trigger, true) and
+      is_nil(column.field) and column == List.last(columns)
+  end
+
   defp item_selected?(selected_ids, item, id_field) do
     id = to_string(Map.get(item, id_field))
     MapSet.member?(selected_ids, id)
@@ -203,4 +327,19 @@ defmodule Cinder.Renderers.Table do
     base_count = length(columns)
     if selectable, do: base_count + 1, else: base_count
   end
+
+  # With `header_trigger` on (default), the prefs trigger normally hijacks the last
+  # fieldless action column's header. When the last column is real data instead,
+  # there's no such cell — so host the trigger in a dedicated trailing cell, keeping
+  # it in the header row without needing the floating `show_prefs` button.
+  # `header_trigger={false}` still suppresses the header trigger entirely.
+  defp append_prefs_trigger?(assigns) do
+    Map.get(assigns, :column_preferences?, false) and
+      Map.get(assigns, :header_trigger, true) and
+      not fieldless_last_column?(assigns.columns)
+  end
+
+  defp fieldless_last_column?(columns), do: match?(%{field: nil}, List.last(columns))
+
+  defp trailing_count(assigns), do: if(append_prefs_trigger?(assigns), do: 1, else: 0)
 end

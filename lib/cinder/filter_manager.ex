@@ -53,11 +53,35 @@ defmodule Cinder.FilterManager do
   def render_filter_controls(assigns) do
     controls_slot = Map.get(assigns, :controls_slot, [])
 
-    if controls_slot != [] do
-      render_filter_controls_with_slot(assigns, controls_slot)
-    else
-      render_filter_controls_default(assigns)
+    cond do
+      controls_slot != [] ->
+        render_filter_controls_with_slot(assigns, controls_slot)
+
+      Map.get(assigns, :filter_selector?, false) ->
+        render_filter_controls_selector(assigns)
+
+      true ->
+        render_filter_controls_default(assigns)
     end
+  end
+
+  defp render_filter_controls_selector(assigns) do
+    controls_data = Cinder.Controls.build_controls_data(assigns)
+    has_content = controls_data.filters != [] or controls_data.search != nil
+
+    assigns =
+      assigns
+      |> assign(:controls_data, controls_data)
+      |> assign(:shown_filters, Map.get(assigns, :shown_filters, MapSet.new()))
+      |> assign(:has_content, has_content)
+
+    ~H"""
+    <div :if={@has_content} class={@theme.filter_container_class} data-key="filter_container_class">
+      <form id={"#{@table_id}-filter-form"} phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
+        <Cinder.Controls.render_filter_selector controls={@controls_data} shown={@shown_filters} />
+      </form>
+    </div>
+    """
   end
 
   defp render_filter_controls_with_slot(assigns, controls_slot) do
@@ -72,7 +96,7 @@ defmodule Cinder.FilterManager do
 
     ~H"""
     <div :if={@has_content} class={@theme.filter_container_class} data-key="filter_container_class">
-      <form phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
+      <form id={"#{@table_id}-filter-form"} phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
         {render_slot(@controls_slot, @controls_data)}
       </form>
     </div>
@@ -107,7 +131,7 @@ defmodule Cinder.FilterManager do
       />
 
       <div id={"#{@table_id}-filter-body"} class={if(@collapsible and @initially_collapsed, do: "hidden")}>
-        <form phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
+        <form id={"#{@table_id}-filter-form"} phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
           <div class={@theme.filter_inputs_class} data-key="filter_inputs_class">
             <Cinder.Controls.render_search
               :if={@controls_data.search != nil}
@@ -381,6 +405,46 @@ defmodule Cinder.FilterManager do
   """
   def clear_all_filters(_filters) do
     %{}
+  end
+
+  @doc """
+  Seeds default filter values for any filterable column that declares a
+  `default:` option and is not already present in the filter state.
+
+  The default (a `%Date{}` or a raw value the column's filter understands) is
+  run through the column's `process/2`, so it produces the same structure a
+  user-entered value would. The result is then checked against the filter's
+  `validate/1`, so a malformed default is ignored rather than seeded as a
+  broken filter. Existing filters are never overwritten.
+  """
+  def apply_defaults(filters, columns) do
+    columns
+    |> Enum.filter(& &1.filterable)
+    |> Enum.reduce(filters, fn column, acc ->
+      case default_filter_value(column) do
+        nil -> acc
+        processed -> Map.put_new(acc, column.field, processed)
+      end
+    end)
+  end
+
+  defp default_filter_value(column) do
+    filter_options = Map.get(column, :filter_options, [])
+
+    with default when default not in [nil, ""] <- Keyword.get(filter_options, :default),
+         processed when not is_nil(processed) <- process_filter_value(default, column),
+         true <- valid_filter_value?(processed, column) do
+      processed
+    else
+      _ -> nil
+    end
+  end
+
+  defp valid_filter_value?(processed, column) do
+    case Registry.get_filter(column.filter_type) do
+      nil -> true
+      module -> module.validate(processed)
+    end
   end
 
   @doc """

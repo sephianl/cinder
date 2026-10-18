@@ -13,6 +13,8 @@ defmodule Cinder.Column do
           field: String.t(),
           label: String.t(),
           sortable: boolean(),
+          sort_field: String.t() | nil,
+          sort_with: [String.t()],
           filterable: boolean(),
           filter_type: atom(),
           filter_options: keyword(),
@@ -25,13 +27,16 @@ defmodule Cinder.Column do
           searchable: boolean(),
           options: list(),
           sort_warning: String.t() | nil,
-          filter_warning: String.t() | nil
+          filter_warning: String.t() | nil,
+          mask_class: String.t()
         }
 
   defstruct [
     :field,
     :label,
     :sortable,
+    :sort_field,
+    :sort_with,
     :filterable,
     :filter_type,
     :filter_options,
@@ -44,7 +49,8 @@ defmodule Cinder.Column do
     :searchable,
     :options,
     :sort_warning,
-    :filter_warning
+    :filter_warning,
+    mask_class: ""
   ]
 
   @doc """
@@ -76,6 +82,8 @@ defmodule Cinder.Column do
         field: nil,
         label: Map.get(slot, :label, ""),
         sortable: false,
+        sort_field: nil,
+        sort_with: [],
         filterable: false,
         filter_type: :text,
         filter_options: [],
@@ -88,7 +96,8 @@ defmodule Cinder.Column do
         searchable: false,
         options: [],
         sort_warning: nil,
-        filter_warning: nil
+        filter_warning: nil,
+        mask_class: ""
       }
     else
       # Parse relationship information if field contains dots
@@ -121,6 +130,8 @@ defmodule Cinder.Column do
         field: field,
         label: Map.get(merged_config, :label, humanize_key(field)),
         sortable: sortable,
+        sort_field: Map.get(slot, :sort_field),
+        sort_with: Map.get(slot, :sort_with, []),
         filterable: filterable,
         filter_type: Map.get(merged_config, :filter_type, :text),
         filter_options: Map.get(merged_config, :filter_options, []),
@@ -133,7 +144,8 @@ defmodule Cinder.Column do
         searchable: Map.get(merged_config, :searchable, false),
         options: Map.get(merged_config, :options, []),
         sort_warning: sort_warning,
-        filter_warning: filter_warning
+        filter_warning: filter_warning,
+        mask_class: sensitive_class(resource, field)
       }
     end
   end
@@ -295,6 +307,33 @@ defmodule Cinder.Column do
   end
 
   defp humanize_key(field), do: humanize_key(to_string(field))
+
+  # Auto-masking of sensitive columns for session recording (e.g. PostHog replay).
+  # Apps opt in with:
+  #
+  #     config :cinder, sensitive_fields: {MyApp.PII, :sensitive?}  # (resource, field) -> boolean
+  #     config :cinder, sensitive_class: "ph-mask"
+  #
+  # When the predicate returns true, the configured class is stored as the column's
+  # `mask_class` and applied to body cells only (not the header), so the recorder
+  # masks the data without hiding the column label. No per-column markup needed.
+  defp sensitive_class(resource, field) do
+    with {module, function} <- Application.get_env(:cinder, :sensitive_fields),
+         class when is_binary(class) <- Application.get_env(:cinder, :sensitive_class),
+         true <- classify(module, function, resource, field) do
+      class
+    else
+      _ -> ""
+    end
+  end
+
+  defp classify(module, function, resource, field) do
+    apply(module, function, [extract_resource_from_query_or_resource(resource), field]) == true
+  rescue
+    _ -> false
+  catch
+    _kind, _reason -> false
+  end
 
   # Extracts the resource from either an Ash.Query struct or a resource module.
   # This allows the column parsing to work with both queries and resource modules.
