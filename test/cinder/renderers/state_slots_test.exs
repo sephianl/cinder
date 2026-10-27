@@ -264,6 +264,33 @@ defmodule Cinder.Renderers.StateSlotsTest do
       refute html =~ "no filters"
     end
 
+    test "empty slot receives filtered? false when a filter only holds its column's default" do
+      default_column = %{
+        field: "name",
+        filterable: true,
+        filter_type: :text,
+        filter_options: [default: "bob"]
+      }
+
+      at_default = %{"name" => %{type: :text, value: "bob", operator: :contains}}
+      changed = %{"name" => %{type: :text, value: "alice", operator: :contains}}
+
+      render_with = fn filters ->
+        table_assigns(%{
+          filters: filters,
+          query_columns: [default_column],
+          empty_slot:
+            make_slot_with_let(fn ctx ->
+              if ctx.filtered?, do: "HAS_FILTERS", else: "NO_FILTERS"
+            end)
+        })
+        |> then(fn assigns -> render_component(&TableRenderer.render/1, assigns) end)
+      end
+
+      assert render_with.(at_default) =~ "NO_FILTERS"
+      assert render_with.(changed) =~ "HAS_FILTERS"
+    end
+
     test "empty slot receives filtered? false when filter present but value empty" do
       assigns =
         table_assigns(%{

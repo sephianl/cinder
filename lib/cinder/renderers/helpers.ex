@@ -213,15 +213,19 @@ defmodule Cinder.Renderers.Helpers do
   Builds context map passed to the empty slot via `:let`.
 
   The `filtered?` field is true when any filter has a meaningful value
-  (using `Cinder.Filter.has_filter_value?/1`) or a search term is active.
+  (using `Cinder.Filter.has_filter_value?/1`) other than its column's default,
+  or a search term is active. A filter still at its default is not one the
+  reader set, and resetting would only put it back.
   """
   def empty_context(assigns) do
     filters = Map.get(assigns, :filters, %{})
     search_term = Map.get(assigns, :search_term, "")
+    defaults = Cinder.FilterManager.apply_defaults(%{}, Map.get(assigns, :query_columns, []))
 
     has_active_filters =
-      Enum.any?(filters, fn {_key, filter} ->
-        Cinder.Filter.has_filter_value?(filter.value)
+      Enum.any?(filters, fn {key, filter} ->
+        Cinder.Filter.has_filter_value?(filter.value) and
+          not match?(%{value: value} when value == filter.value, Map.get(defaults, key))
       end)
 
     %{
