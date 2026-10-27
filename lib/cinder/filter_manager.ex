@@ -79,8 +79,8 @@ defmodule Cinder.FilterManager do
       |> assign(:has_content, has_content)
 
     ~H"""
-    <div :if={@has_content} class={@theme.filter_container_class} data-key="filter_container_class">
-      <form id={"#{@table_id}-filter-form"} phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
+    <.filter_container :if={@has_content} table_id={@table_id} theme={@theme}>
+      <form id={"#{@table_id}-filters"} phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
         <Cinder.Controls.render_filter_row
           controls={@controls_data}
           prefs={@filter_prefs}
@@ -88,7 +88,7 @@ defmodule Cinder.FilterManager do
           drawer_open?={@filter_prefs_drawer_open?}
         />
       </form>
-    </div>
+    </.filter_container>
     """
   end
 
