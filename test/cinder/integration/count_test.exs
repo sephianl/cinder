@@ -49,24 +49,26 @@ defmodule Cinder.Integration.CountTest do
   test "offset pagination counts by default", %{conn: conn} do
     html = footer(conn, :offset)
 
-    assert html =~ "Page 1 of 3"
-    assert html =~ "showing 1-2 of 5"
+    assert html =~ ~r/aria-current="page">\s*1\s*</
+    assert html =~ ~s(title="Go to page 3")
+    assert html =~ "1–2</span> of 5 items"
   end
 
   test "an asynchronous count shows the same footer once it arrives", %{conn: conn} do
     html = footer(conn, count: :async)
 
-    assert html =~ "Page 1 of 3"
-    assert html =~ "showing 1-2 of 5"
+    assert html =~ ~r/aria-current="page">\s*1\s*</
+    assert html =~ ~s(title="Go to page 3")
+    assert html =~ "1–2</span> of 5 items"
   end
 
   test "offset pagination without a count only offers previous and next", %{conn: conn} do
     html = footer(conn, count: false)
 
     assert html =~ "Alpha"
-    assert html =~ "Page 1"
+    assert html =~ "1–2</span> items"
     assert html =~ ~s(title="Next page")
-    refute html =~ "Page 1 of"
+    refute html =~ "</span> of "
     refute html =~ "showing"
     refute html =~ ~s(title="Last page")
   end

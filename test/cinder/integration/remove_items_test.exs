@@ -79,14 +79,15 @@ defmodule Cinder.Integration.RemoveItemsTest do
     } do
       {:ok, view, html} = live(conn, path)
       assert html =~ "Alpha"
-      assert html =~ "showing 1-2 of 5"
+      assert html =~ "1–2</span> of 5 items"
 
       html = remove(view, [albums["Alpha"].id])
 
       refute html =~ "Alpha"
       assert html =~ "Bravo"
-      assert html =~ "Page 1 of 2"
-      assert html =~ "showing 1-1 of 4"
+      assert html =~ ~r/aria-current="page">\s*1\s*</
+      assert html =~ ~s(title="Go to page 2")
+      assert html =~ "1–1</span> of 4 items"
     end
 
     test "only counts the rows that were actually removed", %{
@@ -101,7 +102,7 @@ defmodule Cinder.Integration.RemoveItemsTest do
 
       refute html =~ "Bravo"
       assert html =~ "Alpha"
-      assert html =~ "showing 1-1 of 4"
+      assert html =~ "1–1</span> of 4 items"
     end
 
     test "drops removed rows from the selection and keeps the others", %{
@@ -136,7 +137,7 @@ defmodule Cinder.Integration.RemoveItemsTest do
       refute html =~ "Bravo"
       assert html =~ "Charlie"
       assert html =~ "Delta"
-      assert html =~ "showing 1-2 of 3"
+      assert html =~ "1–2</span> of 3 items"
     end
 
     test "steps back a page when the removal empties the last page", %{
@@ -153,7 +154,8 @@ defmodule Cinder.Integration.RemoveItemsTest do
       refute html =~ "Echo"
       assert html =~ "Charlie"
       assert html =~ "Delta"
-      assert html =~ "Page 2 of 2"
+      assert html =~ ~r/aria-current="page">\s*2\s*</
+      refute html =~ ~s(title="Go to page 3")
 
       assert %{"page" => "2"} =
                view |> assert_patch() |> URI.parse() |> Map.get(:query) |> URI.decode_query()
