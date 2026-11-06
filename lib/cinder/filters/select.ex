@@ -18,8 +18,11 @@ defmodule Cinder.Filters.Select do
     options = get_option(filter_options, :options, [])
     default_prompt = dgettext("cinder", "All %{label}", label: column.label)
     prompt = get_option(filter_options, :prompt, default_prompt)
+    prompt_position = get_option(filter_options, :prompt_position, :first)
+    prompt_value = get_option(filter_options, :prompt_value, "")
 
     current_value = current_value || ""
+    prompt_chosen? = current_value in ["", prompt_value]
 
     # Create a lookup map for labels
     option_labels =
@@ -27,7 +30,7 @@ defmodule Cinder.Filters.Select do
 
     # Create display text for the dropdown button
     display_text =
-      if current_value == "" do
+      if prompt_chosen? do
         prompt
       else
         Map.get(option_labels, current_value, current_value)
@@ -49,6 +52,9 @@ defmodule Cinder.Filters.Select do
       current_value: current_value,
       options: options,
       prompt: prompt,
+      prompt_position: prompt_position,
+      prompt_value: prompt_value,
+      prompt_chosen?: prompt_chosen?,
       theme: theme,
       display_text: display_text,
       dropdown_id: dropdown_id,
@@ -80,17 +86,15 @@ defmodule Cinder.Filters.Select do
         data-key="filter_select_dropdown_class"
         phx-click-away={JS.hide(to: "##{@dropdown_id}-options")}
       >
-        <label class={[@theme.filter_select_option_class, "flex items-center cursor-pointer"]} data-key="filter_select_option_class">
-          <input
-            type="radio"
-            name={field_name(@column.field)}
-            value=""
-            checked={@current_value == ""}
-            class="sr-only"
-            phx-click={JS.hide(to: "##{@dropdown_id}-options")}
-          />
-          <span class={@theme.filter_select_label_class} data-key="filter_select_label_class">{@prompt}</span>
-        </label>
+        <.prompt_option
+          :if={@prompt_position == :first}
+          column={@column}
+          prompt={@prompt}
+          prompt_value={@prompt_value}
+          prompt_chosen?={@prompt_chosen?}
+          theme={@theme}
+          dropdown_id={@dropdown_id}
+        />
 
         <label :for={{label, value} <- @options} class={[@theme.filter_select_option_class, "flex items-center cursor-pointer"]} data-key="filter_select_option_class">
           <input
@@ -104,6 +108,16 @@ defmodule Cinder.Filters.Select do
           <span class={@theme.filter_select_label_class} data-key="filter_select_label_class">{label}</span>
         </label>
 
+        <.prompt_option
+          :if={@prompt_position == :last}
+          column={@column}
+          prompt={@prompt}
+          prompt_value={@prompt_value}
+          prompt_chosen?={@prompt_chosen?}
+          theme={@theme}
+          dropdown_id={@dropdown_id}
+        />
+
         <div :if={Enum.empty?(@options)} class={@theme.filter_select_empty_class} data-key="filter_select_empty_class">
           {dgettext("cinder", "No options available")}
         </div>
@@ -112,21 +126,45 @@ defmodule Cinder.Filters.Select do
     """
   end
 
+  defp prompt_option(assigns) do
+    ~H"""
+    <label class={[@theme.filter_select_option_class, "flex items-center cursor-pointer"]} data-key="filter_select_option_class">
+      <input
+        type="radio"
+        name={field_name(@column.field)}
+        value={@prompt_value}
+        checked={@prompt_chosen?}
+        class="sr-only"
+        phx-click={JS.hide(to: "##{@dropdown_id}-options")}
+      />
+      <span class={@theme.filter_select_label_class} data-key="filter_select_label_class">{@prompt}</span>
+    </label>
+    """
+  end
+
   @impl true
   def process(raw_value, column) when is_binary(raw_value) do
     trimmed = String.trim(raw_value)
     filter_options = Map.get(column, :filter_options, [])
 
-    # A value from the client that isn't among the options can't be used: no filter
-    if trimmed == "" or trimmed == "all" or
-         not Cinder.Filter.Helpers.client_value_allowed?(trimmed, filter_options) do
-      nil
-    else
-      %{
-        type: :select,
-        value: trimmed,
-        operator: :equals
-      }
+    prompt_value = get_option(filter_options, :prompt_value, "")
+
+    cond do
+      # The prompt's own value is a choice of every option, so it is kept but narrows nothing
+      trimmed != "" and trimmed == prompt_value ->
+        %{type: :select, value: trimmed, operator: :any}
+
+      # A value from the client that isn't among the options can't be used: no filter
+      trimmed == "" or trimmed == "all" or
+          not Cinder.Filter.Helpers.client_value_allowed?(trimmed, filter_options) ->
+        nil
+
+      true ->
+        %{
+          type: :select,
+          value: trimmed,
+          operator: :equals
+        }
     end
   end
 
@@ -135,7 +173,8 @@ defmodule Cinder.Filters.Select do
   @impl true
   def validate(value) do
     case value do
-      %{type: :select, value: val, operator: :equals} when is_binary(val) ->
+      %{type: :select, value: val, operator: operator}
+      when is_binary(val) and operator in [:equals, :any] ->
         val != ""
 
       _ ->
@@ -147,13 +186,16 @@ defmodule Cinder.Filters.Select do
   def default_options do
     [
       options: [],
-      prompt: nil
+      prompt: nil,
+      prompt_position: :first,
+      prompt_value: ""
     ]
   end
 
   @impl true
   def empty?(value) do
     case value do
+      %{operator: :any} -> false
       nil -> true
       "" -> true
       "all" -> true
@@ -165,6 +207,8 @@ defmodule Cinder.Filters.Select do
   end
 
   @impl true
+  def build_query(query, _field, %{operator: :any}), do: query
+
   def build_query(query, field, filter_value) do
     %{value: value} = filter_value
 

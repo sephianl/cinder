@@ -93,6 +93,24 @@ Dropdown for single-value selection. **Automatically populated for Ash enum fiel
 >
   {user.department}
 </:col>
+
+<!-- With the prompt listed after the options instead of before them -->
+<:col
+  :let={user}
+  field="department"
+  filter={[type: :select, options: @departments, prompt: "All Departments", prompt_position: :last]}
+>
+  {user.department}
+</:col>
+
+<!-- With the prompt as a choice of its own, kept in the URL and never replaced by a default -->
+<:col
+  :let={user}
+  field="department"
+  filter={[type: :select, options: @departments, prompt: "All Departments", prompt_value: "all", default: @my_department]}
+>
+  {user.department}
+</:col>
 ```
 
 ### Multi-Select Filter
@@ -530,9 +548,9 @@ The `:let` binding provides:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `filters` | keyword list | Filters keyed by field atom, preserving column order. Access by name: `controls.filters[:status]` |
+| `filters` | keyword list | Filters keyed by field atom, preserving column order. Access by name: `controls.filters[:status]`. Each holds `value` and `at_default?`, true when clearing it would only put its `default:` back |
 | `search` | map or nil | Search input data (value, name, label, placeholder, id), or nil when disabled |
-| `active_filter_count` | integer | Number of currently active filters |
+| `active_filter_count` | integer | Number of currently active filters, leaving out any still at its `default:` |
 | `target` | any | LiveComponent target for `phx-target` |
 | `theme` | map | Resolved theme map |
 | `table_id` | string | DOM ID prefix |
