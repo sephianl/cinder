@@ -92,6 +92,11 @@ defmodule Cinder.Integration.StatePersistenceTest do
       generate(album(title: title, genre: genre, artist_id: artist.id))
     end
 
+    on_exit(fn ->
+      Ash.bulk_destroy!(Music.Album, :destroy, %{})
+      Ash.bulk_destroy!(Music.Artist, :destroy, %{})
+    end)
+
     :ok
   end
 

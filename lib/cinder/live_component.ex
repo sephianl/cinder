@@ -730,7 +730,6 @@ defmodule Cinder.LiveComponent do
     end
   end
 
-
   defp execute_bulk_action(slot, socket) do
     action = slot[:action]
     selected_ids = socket.assigns.selected_ids |> MapSet.to_list()

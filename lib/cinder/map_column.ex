@@ -220,13 +220,21 @@ defmodule Cinder.MapColumn do
 
   defp date_bound(query, source, key, :range, ">=", bound) do
     import Ash.Expr
-    Ash.Query.filter(query, fragment("(? -> ? ->> 'from')::date >= ?::date", ^ref(source), ^key, ^bound))
+
+    Ash.Query.filter(
+      query,
+      fragment("(? -> ? ->> 'from')::date >= ?::date", ^ref(source), ^key, ^bound)
+    )
   end
 
   # The `to` bound constrains the stored range's upper bound (`to`), not `from`.
   defp date_bound(query, source, key, :range, "<=", bound) do
     import Ash.Expr
-    Ash.Query.filter(query, fragment("(? -> ? ->> 'to')::date <= ?::date", ^ref(source), ^key, ^bound))
+
+    Ash.Query.filter(
+      query,
+      fragment("(? -> ? ->> 'to')::date <= ?::date", ^ref(source), ^key, ^bound)
+    )
   end
 
   defp boolean_filter_fn(source, key) do
