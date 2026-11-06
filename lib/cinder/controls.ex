@@ -73,7 +73,7 @@ defmodule Cinder.Controls do
   - `:filters` — keyword list of filter data maps keyed by field atom, preserving column order.
       Access by name: `controls.filters[:status]`. Iterate: `for {_name, filter} <- controls.filters`.
   - `:search` — search input data map (value, name, label, placeholder, id), or `nil` when disabled
-  - `:active_filter_count` — number of currently active filters, leaving out any still at its `default:`
+  - `:active_filter_count` — number of currently active filters, leaving out any clearing would not change
   - `:target` — LiveComponent target for `phx-target`
   - `:theme` — resolved theme map
   - `:table_id` — table DOM ID prefix
@@ -102,7 +102,7 @@ defmodule Cinder.Controls do
            label: column.label,
            type: column.filter_type,
            value: current_value,
-           at_default?: FilterManager.at_default?(column, Map.get(assigns.filters, column.field)),
+           clearable?: FilterManager.clearable?(column, Map.get(assigns.filters, column.field)),
            options: column.filter_options,
            name: "filters[#{column.field}]",
            id: filter_id(assigns.table_id, column.field)
@@ -183,7 +183,7 @@ defmodule Cinder.Controls do
       assigns
       |> assign(:column, column)
       |> assign(:table_id, table_id)
-      |> assign(:at_default?, Map.get(assigns.filter, :at_default?, false))
+      |> assign(:clearable?, Map.get(assigns.filter, :clearable?, true))
 
     ~H"""
     <div class={@theme.filter_input_wrapper_class} data-key="filter_input_wrapper_class">
@@ -196,7 +196,7 @@ defmodule Cinder.Controls do
         column={@column}
         table_id={@table_id}
         current_value={@filter.value}
-        at_default?={@at_default?}
+        clearable?={@clearable?}
         filter_values={@filter_values}
         raw_filter_params={@raw_filter_params}
         theme={@theme}

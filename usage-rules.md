@@ -213,6 +213,7 @@ Additional filter types:
 - **Checkbox**: `value`, `label`
 - **Radio Group**: `options`
 - **Autocomplete**: `options`, `placeholder`, `max_results`
+- **Every type**: `default` (the value it starts and resets to), `clearable: false` (a filter that scopes the collection: no ×, never counted towards "Clear all")
 
 ## Custom Controls Layout
 

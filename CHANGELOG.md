@@ -17,7 +17,8 @@
 * `use Cinder.UrlSync` is now all a LiveView needs for URL sync, without a `handle_params/3` calling `Cinder.UrlSync.handle_params/3`.
 * Select filters accept `prompt_position: :last`, which lists the prompt after the options instead of before them.
 * Select filters accept `prompt_value`, which makes the prompt a choice of its own: it is kept in the URL, a `default:` no longer replaces it, and it narrows nothing.
-* The controls data gives each filter an `at_default?` flag, true while clearing it would only put its `default:` back.
+* The controls data gives each filter a `clearable?` flag, false while clearing it would change nothing.
+* Any filter accepts `clearable: false`, for a filter that scopes the collection rather than narrowing it: it shows no ×, never counts towards "Clear all", and still takes its `default:` back on reset.
 
 ### Bugfixes
 
