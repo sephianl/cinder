@@ -111,6 +111,15 @@ Dropdown for single-value selection. **Automatically populated for Ash enum fiel
 >
   {user.department}
 </:col>
+
+<!-- A filter that scopes the page rather than narrowing it: no ×, and "Clear all" leaves it alone -->
+<:col
+  :let={user}
+  field="department"
+  filter={[type: :select, options: @departments, default: @my_department, clearable: false]}
+>
+  {user.department}
+</:col>
 ```
 
 ### Multi-Select Filter
@@ -548,9 +557,9 @@ The `:let` binding provides:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `filters` | keyword list | Filters keyed by field atom, preserving column order. Access by name: `controls.filters[:status]`. Each holds `value` and `at_default?`, true when clearing it would only put its `default:` back |
+| `filters` | keyword list | Filters keyed by field atom, preserving column order. Access by name: `controls.filters[:status]`. Each holds `value` and `clearable?`, false when clearing it would change nothing |
 | `search` | map or nil | Search input data (value, name, label, placeholder, id), or nil when disabled |
-| `active_filter_count` | integer | Number of currently active filters, leaving out any still at its `default:` |
+| `active_filter_count` | integer | Number of currently active filters, leaving out any clearing would not change |
 | `target` | any | LiveComponent target for `phx-target` |
 | `theme` | map | Resolved theme map |
 | `table_id` | string | DOM ID prefix |

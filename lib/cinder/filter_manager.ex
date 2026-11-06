@@ -338,7 +338,7 @@ defmodule Cinder.FilterManager do
     assigns =
       assigns
       |> assign(:filter_content, filter_content)
-      |> assign_new(:at_default?, fn -> false end)
+      |> assign_new(:clearable?, fn -> true end)
 
     ~H"""
     <div class="flex items-center group/cinder-filter" data-cinder-filter={@column.field}>
@@ -346,7 +346,7 @@ defmodule Cinder.FilterManager do
         <%= @filter_content %>
       </div>
 
-      <!-- Clear individual filter button - always present but invisible when no value, or when clearing would only put its default back -->
+      <!-- Clear individual filter button - always present but invisible when no value, or when clearing would change nothing -->
       <button
         type="button"
         data-cinder-clear
@@ -355,7 +355,7 @@ defmodule Cinder.FilterManager do
         phx-target={@target}
         class={[
           @theme.filter_clear_button_class,
-          unless(@current_value != "" and not is_nil(@current_value) and @current_value != [] and @current_value != %{from: "", to: ""} and @current_value != %{min: "", max: ""} and not @at_default?, do: "invisible group-data-[cinder-partial]/cinder-filter:visible", else: "")
+          unless(@current_value != "" and not is_nil(@current_value) and @current_value != [] and @current_value != %{from: "", to: ""} and @current_value != %{min: "", max: ""} and @clearable?, do: "invisible group-data-[cinder-partial]/cinder-filter:visible", else: "")
         ]}
         data-key="filter_clear_button_class"
         title={dgettext("cinder", "Clear filter")}
@@ -474,6 +474,20 @@ defmodule Cinder.FilterManager do
     do: match?(%{value: ^value}, default_filter_value(column))
 
   @doc """
+  Whether clearing a filter would change anything: it is set, its column does
+  not declare `clearable: false`, and it is not just holding its `default:`.
+  """
+  def clearable?(_column, nil), do: false
+
+  def clearable?(column, filter),
+    do: declared_clearable?(column) and not at_default?(column, filter)
+
+  defp declared_clearable?(nil), do: true
+
+  defp declared_clearable?(column),
+    do: Keyword.get(Map.get(column, :filter_options, []), :clearable, true)
+
+  @doc """
   Clears a specific filter from the filter state.
   """
   def clear_filter(filters, key) do
@@ -528,21 +542,21 @@ defmodule Cinder.FilterManager do
   end
 
   @doc """
-  Counts the number of active filters, leaving out any still at its column's default.
+  Counts the number of active filters, leaving out any clearing would not change.
   """
   def count_active_filters(filters, columns) do
     filters |> reader_set_filters(columns) |> map_size()
   end
 
   @doc """
-  The filters a reader set: those not holding their column's `default:`. A
-  filter still at its default is not one the reader set, and resetting would
-  only put it back.
+  The filters a reader set: those clearing would change. A filter still at its
+  column's `default:`, or one its column declares `clearable: false`, is not one
+  the reader set, and resetting would only put it back.
   """
   def reader_set_filters(filters, columns) do
     columns_by_field = Map.new(columns, &{&1.field, &1})
 
-    Map.reject(filters, fn {field, filter} -> at_default?(columns_by_field[field], filter) end)
+    Map.filter(filters, fn {field, filter} -> clearable?(columns_by_field[field], filter) end)
   end
 
   @doc """

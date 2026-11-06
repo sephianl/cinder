@@ -156,22 +156,44 @@ defmodule Cinder.FilterManager.DefaultsTest do
     end
   end
 
+  describe "clearable?/2" do
+    test "is true for a set filter holding something other than its default" do
+      assert FilterManager.clearable?(select_column(default: "active"), select_filter("done"))
+    end
+
+    test "is false while the filter holds its default" do
+      refute FilterManager.clearable?(select_column(default: "active"), select_filter("active"))
+    end
+
+    test "is false for a column declaring clearable: false, whatever it holds" do
+      refute FilterManager.clearable?(select_column(clearable: false), select_filter("done"))
+    end
+
+    test "is false for a filter that is not set" do
+      refute FilterManager.clearable?(select_column([]), nil)
+    end
+
+    test "is true for a set filter no column declares" do
+      assert FilterManager.clearable?(nil, select_filter("active"))
+    end
+  end
+
   describe "the clear button of a filter" do
-    test "stays hidden while the filter holds its default" do
-      assert clear_button(at_default?: true) =~ "invisible"
+    test "stays hidden while clearing it would change nothing" do
+      assert clear_button(clearable?: false) =~ "invisible"
     end
 
-    test "shows once the filter holds another value" do
-      refute clear_button(at_default?: false) =~ "invisible"
+    test "shows while clearing it would change something" do
+      refute clear_button(clearable?: true) =~ "invisible"
     end
 
-    defp clear_button(at_default?: at_default?) do
+    defp clear_button(clearable?: clearable?) do
       filter = %{
         field: "status",
         label: "Status",
         type: :select,
         value: "active",
-        at_default?: at_default?,
+        clearable?: clearable?,
         options: [options: [{"Active", "active"}, {"Done", "done"}]],
         name: "filters[status]",
         id: "table-filter-status"
@@ -199,6 +221,13 @@ defmodule Cinder.FilterManager.DefaultsTest do
 
       assert FilterManager.count_active_filters(at_default, columns) == 0
       assert FilterManager.count_active_filters(changed, columns) == 1
+    end
+
+    test "leaves out a filter whose column declares clearable: false" do
+      columns = [date_column(clearable: false)]
+      filters = %{"delivered_on" => %{type: :date, value: "2026-06-01", operator: :equals}}
+
+      assert FilterManager.count_active_filters(filters, columns) == 0
     end
   end
 end
