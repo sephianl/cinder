@@ -11,6 +11,7 @@ msgstr ""
 "Language: nl\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filter_manager.ex
 #, elixir-autogen
 msgid "Clear filter"
@@ -99,6 +100,7 @@ msgstr "Toon {selector} per pagina"
 msgid "To"
 msgstr "Tot"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filter_manager.ex
 #: lib/cinder/filters/select.ex
 #, elixir-autogen, elixir-format
@@ -123,6 +125,7 @@ msgid "Select options..."
 msgstr "Selecteer opties..."
 
 #: lib/cinder/controls.ex
+#: lib/cinder/filter_bar.ex
 #, elixir-autogen, elixir-format
 msgid "Clear search"
 msgstr "Zoekopdracht wissen"
@@ -144,16 +147,19 @@ msgstr "Geen opties beschikbaar"
 msgid "No results found"
 msgstr "Geen resultaten gevonden"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/multi_select.ex
 #, elixir-autogen, elixir-format
 msgid "%{count} selected"
 msgstr "%{count} geselecteerd"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/boolean.ex
 #, elixir-autogen, elixir-format
 msgid "False"
 msgstr "Onwaar"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/boolean.ex
 #, elixir-autogen, elixir-format
 msgid "True"
@@ -224,3 +230,53 @@ msgstr "Toont {range} van %{total} items"
 #, elixir-autogen, elixir-format
 msgid "Showing {range} items"
 msgstr "Toont {range} items"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Filter"
+msgstr "Filter"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Last month"
+msgstr "Vorige maand"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Last week"
+msgstr "Vorige week"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Past 30 days"
+msgstr "Afgelopen 30 dagen"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Past 7 days"
+msgstr "Afgelopen 7 dagen"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "This month"
+msgstr "Deze maand"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "This week"
+msgstr "Deze week"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Today"
+msgstr "Vandaag"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Tomorrow"
+msgstr "Morgen"
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Yesterday"
+msgstr "Gisteren"
