@@ -312,6 +312,18 @@ defmodule Cinder.Filter do
   """
   @callback build_query(Ash.Query.t(), String.t(), map()) :: Ash.Query.t()
 
+  @doc """
+  The short text a `show_filters: :bar` pill shows beside the filter's label,
+  for the value the filter currently holds (as the controls data carries it).
+
+  Optional. Without it the bar looks the value up among the column's
+  `options`, and otherwise shows it as is. Return `nil` for a pill that shows
+  only its label.
+  """
+  @callback summary(value :: any(), column()) :: String.t() | nil
+
+  @optional_callbacks summary: 2
+
   # Shared utility functions
 
   @doc """

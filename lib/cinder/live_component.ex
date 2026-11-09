@@ -1516,8 +1516,11 @@ defmodule Cinder.LiveComponent do
   # Every table gets the same row; a row with something worth editing also gets
   # the editor. Row and drawer work from one ordered list, so dragging a filter
   # in the drawer moves it in the row — independently of the column order.
+  # The bar has no editor: its "add filter" menu already keeps unused filters out of sight.
   defp assign_filter_definitions(socket, filter_cols) do
-    editable? = Cinder.FilterPreferences.editable?(filter_cols)
+    editable? =
+      socket.assigns[:show_filters] != :bar and Cinder.FilterPreferences.editable?(filter_cols)
+
     prefs = socket.assigns.filter_preferences
 
     ordered =
