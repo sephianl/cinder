@@ -58,7 +58,10 @@ defmodule Cinder.Theme do
     # Table
     container_class: "",
     controls_class: "",
+    table_scroll_class: "",
     table_wrapper_class: "overflow-x-auto",
+    table_scroll_rail_class: "",
+    table_scroll_thumb_class: "",
     table_class: "w-full border-collapse",
     thead_class: "",
     tbody_class: "",

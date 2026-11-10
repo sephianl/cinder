@@ -11,6 +11,9 @@
  * Without `sortablejs`, show/hide and persistence still work; only
  * drag-to-reorder is disabled.
  *
+ * `CinderTableScroll` is only attached when the theme sets
+ * `table_scroll_rail_class`; see `createTableScrollHook`.
+ *
  * Everything these hooks keep in the browser is namespaced by
  * `data-cinder-storage-scope` on <html>. Stamp it with the signed-in user's id:
  *
@@ -196,6 +199,141 @@ function createTableStateHook() {
   };
 }
 
+// A thumb narrower than this is too small to grab, however wide the table.
+const THUMB_FLOOR = 32;
+
+/**
+ * What a table wider than its container needs to show it can be scrolled
+ * sideways: a horizontal scrollbar that sticks to the bottom of the viewport,
+ * and flags for the theme to draw a shadow on each side that has more to show.
+ *
+ * The native bar sits at the end of the scrolling element, which on a long
+ * table is below the fold; this hook hides it and drives the same element from
+ * a rail of its own. The rail is drawn rather than delegated to a second
+ * scrolling element, because the two would have to keep each other's
+ * `scrollLeft` in step and would bounce the event back and forth doing it.
+ *
+ * The markup it expects, all within the hook element: `[data-scroll-body]` (the
+ * element that overflows), `[data-scroll-rail]` (the track) and
+ * `[data-scroll-thumb]` inside it. While the body overflows, the rail loses its
+ * `hidden` attribute and the body gains `data-scroll-proxied`, for the app's CSS
+ * to hide the native bar by. The hook element carries `data-hidden-left` and
+ * `data-hidden-right` while columns sit out of view on that side.
+ */
+function createTableScrollHook() {
+  return {
+    mounted() {
+      this.body = this.el.querySelector("[data-scroll-body]");
+      this.rail = this.el.querySelector("[data-scroll-rail]");
+      this.thumb = this.el.querySelector("[data-scroll-thumb]");
+      this.onScroll = () => this.position();
+      this.body.addEventListener("scroll", this.onScroll, { passive: true });
+
+      this.onDown = (e) => this.grab(e);
+      this.onMove = (e) => this.drag(e);
+      this.onUp = () => this.release();
+      this.rail.addEventListener("pointerdown", this.onDown);
+      this.rail.addEventListener("pointermove", this.onMove);
+      this.rail.addEventListener("pointerup", this.onUp);
+      this.rail.addEventListener("pointercancel", this.onUp);
+
+      // The table's width moves with the viewport and with a late font, neither
+      // of which is a re-render.
+      this.observer = new ResizeObserver(() => this.measure());
+      this.observe();
+    },
+
+    // A re-render can change the width, and puts back what this hook set: the
+    // server renders the rail hidden.
+    updated() {
+      this.observe();
+    },
+
+    destroyed() {
+      this.observer.disconnect();
+      this.body.removeEventListener("scroll", this.onScroll);
+      this.rail.removeEventListener("pointerdown", this.onDown);
+      this.rail.removeEventListener("pointermove", this.onMove);
+      this.rail.removeEventListener("pointerup", this.onUp);
+      this.rail.removeEventListener("pointercancel", this.onUp);
+    },
+
+    observe() {
+      this.observer.disconnect();
+      this.observer.observe(this.body);
+      // The table itself can change size without the container around it
+      // changing at all.
+      if (this.body.firstElementChild) {
+        this.observer.observe(this.body.firstElementChild);
+      }
+      this.measure();
+    },
+
+    measure() {
+      const scrollable = this.body.scrollWidth > this.body.clientWidth + 1;
+      this.rail.hidden = !scrollable;
+      this.body.toggleAttribute("data-scroll-proxied", scrollable);
+
+      if (scrollable) {
+        const share = this.body.clientWidth / this.body.scrollWidth;
+        this.thumbWidth = Math.max(this.rail.clientWidth * share, THUMB_FLOOR);
+        this.thumb.style.width = `${this.thumbWidth}px`;
+      }
+      this.position();
+    },
+
+    position() {
+      const overflow = this.overflow();
+      const x =
+        overflow > 0 ? (this.body.scrollLeft / overflow) * this.travel() : 0;
+
+      this.thumb.style.transform = `translateX(${x}px)`;
+      this.el.toggleAttribute("data-hidden-left", this.body.scrollLeft > 1);
+      this.el.toggleAttribute(
+        "data-hidden-right",
+        this.body.scrollLeft < overflow - 1,
+      );
+    },
+
+    grab(e) {
+      const thumb = this.thumb.getBoundingClientRect();
+      const onThumb = e.clientX >= thumb.left && e.clientX <= thumb.right;
+      // Grabbing the track rather than the thumb jumps to the click, thumb
+      // centred, and carries on as a drag from there.
+      this.offset = onThumb ? e.clientX - thumb.left : this.thumbWidth / 2;
+      this.rail.setPointerCapture(e.pointerId);
+      this.rail.toggleAttribute("data-dragging", true);
+      this.drag(e);
+    },
+
+    drag(e) {
+      if (!this.rail.hasAttribute("data-dragging")) return;
+      e.preventDefault();
+
+      const x =
+        e.clientX - this.rail.getBoundingClientRect().left - this.offset;
+      const travel = this.travel();
+      const ratio = travel > 0 ? Math.min(Math.max(x / travel, 0), 1) : 0;
+
+      this.body.scrollLeft = ratio * this.overflow();
+    },
+
+    release() {
+      this.rail.toggleAttribute("data-dragging", false);
+    },
+
+    // How far the thumb may move, and how far the table may scroll. The thumb
+    // floor eats into the first, so the two only agree through this ratio.
+    travel() {
+      return this.rail.clientWidth - this.thumbWidth;
+    },
+
+    overflow() {
+      return this.body.scrollWidth - this.body.clientWidth;
+    },
+  };
+}
+
 /** Pass `{ Sortable }` to enable drag-to-reorder. */
 export function createCinderHooks({ Sortable } = {}) {
   return {
@@ -214,6 +352,7 @@ export function createCinderHooks({ Sortable } = {}) {
     }),
     CinderFilterSortable: createPrefsSortableHook(Sortable, "reorder_filters"),
     CinderTableState: createTableStateHook(),
+    CinderTableScroll: createTableScrollHook(),
   };
 }
 

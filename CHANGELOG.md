@@ -19,6 +19,7 @@
 * Select filters accept `prompt_value`, which makes the prompt a choice of its own: it is kept in the URL, a `default:` no longer replaces it, and it narrows nothing.
 * The controls data gives each filter a `clearable?` flag, false while clearing it would change nothing.
 * Any filter accepts `clearable: false`, for a filter that scopes the collection rather than narrowing it: it shows no ×, never counts towards "Clear all", and still takes its `default:` back on reset.
+* Themes can give a wide table a horizontal scrollbar that sticks to the bottom of the viewport, and flags for an edge shadow on each side with columns out of view, by setting `table_scroll_rail_class`. It needs the `CinderTableScroll` hook from `createCinderHooks`; see the theming guide.
 
 ### Bugfixes
 

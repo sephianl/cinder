@@ -92,111 +92,129 @@ defmodule Cinder.Renderers.Table do
       />
 
       <!-- Main table -->
-      <div class={[
-             @theme.table_wrapper_class,
-             prefs_hydration_class(assigns)
-           ]} data-key="table_wrapper_class">
-        <table class={@theme.table_class} data-key="table_class">
-          <thead class={@theme.thead_class} data-key="thead_class">
-            <tr class={@theme.header_row_class} data-key="header_row_class">
-              <th :if={Selection.enabled?(@selectable)} class={[@theme.th_class, "w-10"]} data-key="th_class">
-                <input
-                  type="checkbox"
-                  checked={all_page_selected?(@selected_ids, @data, @id_field, @selectable)}
-                  phx-click="toggle_select_all_page"
-                  phx-target={@myself}
-                  class={@theme.selection_checkbox_class}
-                  data-key="selection_checkbox_class"
-                />
-              </th>
-              <th :for={column <- @columns} class={[@theme.th_class, column.class]} data-key="th_class">
-                <.header_content
-                  variant={header_variant(column, @columns, assigns)}
-                  column={column}
-                  theme={@theme}
-                  myself={@myself}
-                  loading={@show_loading_state}
-                  sort_by={@sort_by}
-                  drawer_open?={Map.get(assigns, :column_prefs_drawer_open?, false)}
-                  trigger_slot={Map.get(assigns, :columns_trigger_slot, [])}
-                />
-              </th>
-              <th
-                :if={append_prefs_trigger?(assigns)}
-                class={[@theme.th_class, "w-10"]}
-                data-key="th_class"
-              >
-                <.header_content
-                  variant={:columns_trigger}
-                  column={%{field: nil}}
-                  theme={@theme}
-                  myself={@myself}
-                  loading={@show_loading_state}
-                  sort_by={@sort_by}
-                  drawer_open?={Map.get(assigns, :column_prefs_drawer_open?, false)}
-                  trigger_slot={Map.get(assigns, :columns_trigger_slot, [])}
-                />
-              </th>
-            </tr>
-          </thead>
-          <tbody class={[@theme.tbody_class, (@show_loading_state && @theme.loading_row_class || "")]} data-key="tbody_class">
-            <tr :for={item <- @data} :if={not @error}
-                class={selection_classes(@theme.row_class, Map.get(assigns, :item_class), @row_click, row_selection(@selectable, Map.get(assigns, :select_on_row_click, true)), @selected_ids, item, @id_field, Map.get(@theme, :selected_row_class))}
-                data-item-id={to_string(Map.get(item, @id_field))}
-                data-key="row_class"
-                phx-click={selection_click_action(@row_click, row_selection(@selectable, Map.get(assigns, :select_on_row_click, true)), @selected_ids, item, @id_field, @myself)}>
-              <td :if={Selection.enabled?(@selectable)} class={[@theme.td_class, "w-10"]} data-key="td_class">
-                <input
-                  type="checkbox"
-                  disabled={not Selection.item_toggleable?(@selectable, @selected_ids, item, @id_field)}
-                  checked={Selection.item_selected?(@selected_ids, item, @id_field)}
-                  phx-click="toggle_select"
-                  phx-value-id={to_string(Map.get(item, @id_field))}
-                  phx-target={@myself}
-                  class={@theme.selection_checkbox_class}
-                  data-key="selection_checkbox_class"
-                />
-              </td>
-              <td :for={column <- @columns} class={[@theme.td_class, column.class, Map.get(column, :mask_class, "")]} data-key="td_class">
-                <%!-- A self-closing `<:col field="..." />` has no content: show the field's value --%>
-                <%= if column.slot[:inner_block] do %>
-                  {render_slot(column.slot, item)}
-                <% else %>
-                  {column.inner_block.(item)}
-                <% end %>
-              </td>
-              <td :if={append_prefs_trigger?(assigns)} class={@theme.td_class} data-key="td_class"></td>
-            </tr>
-            <!-- Error State -->
-            <tr :if={@error and not @loading}>
-              <td colspan={column_count(@columns, @selectable) + trailing_count(assigns)} class={@theme.empty_class} data-key="error_class">
-                <%= if has_slot?(assigns, :error_slot) do %>
-                  {render_slot(@error_slot)}
-                <% else %>
-                  <div class={@theme.error_container_class} data-key="error_container_class">
-                    <span class={@theme.error_message_class} data-key="error_message_class">{@error_message}</span>
-                  </div>
-                <% end %>
-              </td>
-            </tr>
-            <!-- Empty State (only when not loading and not error) -->
-            <tr :if={@data == [] and not @loading and not @error}>
-              <td colspan={column_count(@columns, @selectable) + trailing_count(assigns)} class={@theme.empty_class} data-key="empty_class">
-                <%= if has_slot?(assigns, :empty_slot) do %>
-                  {render_slot(@empty_slot, empty_context(assigns))}
-                <% else %>
-                  <.render_empty
-                    empty_message={@empty_message}
-                    empty_filtered_message={Map.get(assigns, :empty_filtered_message)}
-                    filtered?={empty_context(assigns).filtered?}
-                    target={@myself}
-                    theme={@theme}
+      <div
+        id={"#{@id}-scroll"}
+        class={Map.get(@theme, :table_scroll_class, "")}
+        phx-hook={sticky_scrollbar?(@theme) && "CinderTableScroll"}
+        data-key="table_scroll_class"
+      >
+        <div class={[
+               @theme.table_wrapper_class,
+               prefs_hydration_class(assigns)
+             ]} data-key="table_wrapper_class" data-scroll-body>
+          <table class={@theme.table_class} data-key="table_class">
+            <thead class={@theme.thead_class} data-key="thead_class">
+              <tr class={@theme.header_row_class} data-key="header_row_class">
+                <th :if={Selection.enabled?(@selectable)} class={[@theme.th_class, "w-10"]} data-key="th_class">
+                  <input
+                    type="checkbox"
+                    checked={all_page_selected?(@selected_ids, @data, @id_field, @selectable)}
+                    phx-click="toggle_select_all_page"
+                    phx-target={@myself}
+                    class={@theme.selection_checkbox_class}
+                    data-key="selection_checkbox_class"
                   />
-                <% end %>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                </th>
+                <th :for={column <- @columns} class={[@theme.th_class, column.class]} data-key="th_class">
+                  <.header_content
+                    variant={header_variant(column, @columns, assigns)}
+                    column={column}
+                    theme={@theme}
+                    myself={@myself}
+                    loading={@show_loading_state}
+                    sort_by={@sort_by}
+                    drawer_open?={Map.get(assigns, :column_prefs_drawer_open?, false)}
+                    trigger_slot={Map.get(assigns, :columns_trigger_slot, [])}
+                  />
+                </th>
+                <th
+                  :if={append_prefs_trigger?(assigns)}
+                  class={[@theme.th_class, "w-10"]}
+                  data-key="th_class"
+                >
+                  <.header_content
+                    variant={:columns_trigger}
+                    column={%{field: nil}}
+                    theme={@theme}
+                    myself={@myself}
+                    loading={@show_loading_state}
+                    sort_by={@sort_by}
+                    drawer_open?={Map.get(assigns, :column_prefs_drawer_open?, false)}
+                    trigger_slot={Map.get(assigns, :columns_trigger_slot, [])}
+                  />
+                </th>
+              </tr>
+            </thead>
+            <tbody class={[@theme.tbody_class, (@show_loading_state && @theme.loading_row_class || "")]} data-key="tbody_class">
+              <tr :for={item <- @data} :if={not @error}
+                  class={selection_classes(@theme.row_class, Map.get(assigns, :item_class), @row_click, row_selection(@selectable, Map.get(assigns, :select_on_row_click, true)), @selected_ids, item, @id_field, Map.get(@theme, :selected_row_class))}
+                  data-item-id={to_string(Map.get(item, @id_field))}
+                  data-key="row_class"
+                  phx-click={selection_click_action(@row_click, row_selection(@selectable, Map.get(assigns, :select_on_row_click, true)), @selected_ids, item, @id_field, @myself)}>
+                <td :if={Selection.enabled?(@selectable)} class={[@theme.td_class, "w-10"]} data-key="td_class">
+                  <input
+                    type="checkbox"
+                    disabled={not Selection.item_toggleable?(@selectable, @selected_ids, item, @id_field)}
+                    checked={Selection.item_selected?(@selected_ids, item, @id_field)}
+                    phx-click="toggle_select"
+                    phx-value-id={to_string(Map.get(item, @id_field))}
+                    phx-target={@myself}
+                    class={@theme.selection_checkbox_class}
+                    data-key="selection_checkbox_class"
+                  />
+                </td>
+                <td :for={column <- @columns} class={[@theme.td_class, column.class, Map.get(column, :mask_class, "")]} data-key="td_class">
+                  <%!-- A self-closing `<:col field="..." />` has no content: show the field's value --%>
+                  <%= if column.slot[:inner_block] do %>
+                    {render_slot(column.slot, item)}
+                  <% else %>
+                    {column.inner_block.(item)}
+                  <% end %>
+                </td>
+                <td :if={append_prefs_trigger?(assigns)} class={@theme.td_class} data-key="td_class"></td>
+              </tr>
+              <!-- Error State -->
+              <tr :if={@error and not @loading}>
+                <td colspan={column_count(@columns, @selectable) + trailing_count(assigns)} class={@theme.empty_class} data-key="error_class">
+                  <%= if has_slot?(assigns, :error_slot) do %>
+                    {render_slot(@error_slot)}
+                  <% else %>
+                    <div class={@theme.error_container_class} data-key="error_container_class">
+                      <span class={@theme.error_message_class} data-key="error_message_class">{@error_message}</span>
+                    </div>
+                  <% end %>
+                </td>
+              </tr>
+              <!-- Empty State (only when not loading and not error) -->
+              <tr :if={@data == [] and not @loading and not @error}>
+                <td colspan={column_count(@columns, @selectable) + trailing_count(assigns)} class={@theme.empty_class} data-key="empty_class">
+                  <%= if has_slot?(assigns, :empty_slot) do %>
+                    {render_slot(@empty_slot, empty_context(assigns))}
+                  <% else %>
+                    <.render_empty
+                      empty_message={@empty_message}
+                      empty_filtered_message={Map.get(assigns, :empty_filtered_message)}
+                      filtered?={empty_context(assigns).filtered?}
+                      target={@myself}
+                      theme={@theme}
+                    />
+                  <% end %>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          :if={sticky_scrollbar?(@theme)}
+          data-scroll-rail
+          hidden
+          aria-hidden="true"
+          class={Map.get(@theme, :table_scroll_rail_class, "")}
+          data-key="table_scroll_rail_class"
+        >
+          <div data-scroll-thumb class={Map.get(@theme, :table_scroll_thumb_class, "")} data-key="table_scroll_thumb_class"></div>
+        </div>
       </div>
 
       <!-- Loading indicator -->
@@ -346,4 +364,8 @@ defmodule Cinder.Renderers.Table do
   defp fieldless_last_column?(columns), do: match?(%{field: nil}, List.last(columns))
 
   defp trailing_count(assigns), do: if(append_prefs_trigger?(assigns), do: 1, else: 0)
+
+  # The sticky scrollbar is opt-in: a theme that leaves the rail unstyled keeps
+  # the browser's own scrollbar and no hook is attached.
+  defp sticky_scrollbar?(theme), do: Map.get(theme, :table_scroll_rail_class, "") != ""
 end

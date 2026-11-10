@@ -263,6 +263,34 @@ different suffix). Sort indicators are Heroicons: set the icon via the
 `sort_*_icon_name` properties (e.g. `set :sort_asc_icon_name, "hero-chevron-up"`)
 and style it with the matching `sort_*_icon_class`.
 
+### Sticky horizontal scrollbar
+
+A table wider than its container scrolls sideways inside `table_wrapper_class`,
+and the browser's scrollbar for it sits under the last row, which on a long
+table is below the fold. Setting `table_scroll_rail_class` swaps it for a
+scrollbar of Cinder's own: the table is wrapped in an element with
+`table_scroll_class` and the `CinderTableScroll` hook (from
+`createCinderHooks`), and a rail with `table_scroll_thumb_class` inside it
+follows the table. The hook leaves all styling to the theme and your CSS:
+
+- the rail carries the `hidden` attribute while the table fits;
+- the wrapper gets `data-scroll-proxied` while the rail is in use, to hide the
+  native scrollbar by;
+- the outer element gets `data-hidden-left` / `data-hidden-right` while columns
+  are out of view on that side, to draw an edge shadow by;
+- the rail gets `data-dragging` while its thumb is held.
+
+```elixir
+set :table_scroll_class, "relative"
+set :table_scroll_rail_class, "sticky bottom-0 h-2"
+set :table_scroll_thumb_class, "absolute inset-y-0 left-0 rounded-full bg-gray-400"
+```
+
+```css
+[data-scroll-proxied] { scrollbar-width: none; }
+[data-scroll-proxied]::-webkit-scrollbar { display: none; }
+```
+
 <!-- theme-properties-begin -->
 
 ### All Theme Properties
@@ -370,6 +398,9 @@ set :sort_indicator_class, "ml-1 inline-flex items-center align-baseline"
 set :sort_none_icon_class, "w-3 h-3 opacity-50"
 set :sort_none_icon_name, "hero-chevron-up-down"
 set :table_class, "w-full border-collapse"
+set :table_scroll_class, ""
+set :table_scroll_rail_class, ""
+set :table_scroll_thumb_class, ""
 set :table_wrapper_class, "overflow-x-auto"
 set :tbody_class, ""
 set :td_class, ""

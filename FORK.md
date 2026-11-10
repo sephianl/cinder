@@ -54,6 +54,7 @@ upstream allows: every change here is one we re-apply on each upstream sync.
 | Select-all in list layouts | yes | | 1.0-beta selects everything matching a query (#202) |
 | Masking sensitive columns for session replay (`config :cinder, sensitive_fields:`) | yes | yes | Not planned |
 | Column slots kept out of the async load task (it copied the host LiveView's assigns per column) | yes | yes | PR open (#250) |
+| Sticky horizontal scrollbar and edge flags for wide tables (`table_scroll_*_class`, `CinderTableScroll`) | | yes | Not planned |
 | JS hooks entry `createCinderHooks` (column and filter preferences, persistence) | yes | yes | Upstream uses colocated hooks; ours sits beside them |
 
 ### Deliberate differences in look
