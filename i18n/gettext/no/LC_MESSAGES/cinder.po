@@ -116,6 +116,7 @@ msgstr "Søk"
 
 #: lib/cinder/collection.ex
 #: lib/cinder/controls.ex
+#: lib/cinder/filter_bar.ex
 #, elixir-autogen, elixir-format
 msgid "Search..."
 msgstr "Søk..."

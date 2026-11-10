@@ -15,7 +15,9 @@ defmodule Cinder.FilterBar do
   the bar submits the params the row would and URL sync, state storage and
   query building are untouched.
 
-  Selects and multi-selects get a list of options in the dropdown; date and date
+  Selects and multi-selects get a list of options in the dropdown — with a
+  search field above it once the list is longer than the dropdown shows, which
+  narrows the list in the browser without leaving any option out; date and date
   range filters get relative shortcuts ("Last week") above their inputs, which
   the browser resolves to fixed dates in the reader's own calendar, so a URL
   keeps meaning the days it was made on. Every other type, custom filters
@@ -37,6 +39,9 @@ defmodule Cinder.FilterBar do
   alias Phoenix.LiveView.JS
 
   @always_shown 3
+
+  # About as many options as the dropdown shows before it scrolls.
+  @searchable_from 10
 
   @date_ranges ~w(today yesterday tomorrow this_week last_week past_7_days this_month last_month past_30_days)
   @single_dates ~w(today yesterday tomorrow)
@@ -113,6 +118,9 @@ defmodule Cinder.FilterBar do
               this.close()
               this.hideMenu()
             })
+            this.el.addEventListener("input", (event) => {
+              if (event.target.matches("[data-bar-option-search]")) this.narrow(event.target)
+            })
             document.addEventListener("keydown", this.onKey)
             document.addEventListener("mousedown", this.onOutside)
             this.updated()
@@ -121,6 +129,8 @@ defmodule Cinder.FilterBar do
             this.el.querySelectorAll("[data-bar-dropdown]").forEach((el) => this.js().ignoreAttributes(el, ["style"]))
             this.el.querySelectorAll("[data-bar-pill]").forEach((el) => this.js().ignoreAttributes(el, ["data-open"]))
             this.markChosen()
+            // A patch redraws the options, dropping what a search hid
+            this.el.querySelectorAll("[data-bar-option-search]").forEach((input) => this.narrow(input))
             if (!this.open) return
             // A value picked from the menu takes its filter out of it: the dropdown moves under the new pill
             if (this.beside && !this.beside.isConnected) {
@@ -136,7 +146,7 @@ defmodule Cinder.FilterBar do
           },
           click(event) {
             const item = event.target.closest("[data-bar-submenu]")
-            if (item) return this.showBeside(item)
+            if (item) return this.showBeside(item, true)
             if (event.target.closest(`#${this.el.id}-add`)) return this.close()
             const opener = event.target.closest("[data-bar-open]")
             if (opener) {
@@ -163,16 +173,38 @@ defmodule Cinder.FilterBar do
             this.anchor()?.setAttribute("data-open", "")
             this.js().show(dropdown)
             this.position()
+            this.focusSearch()
           },
-          showBeside(item) {
+          showBeside(item, focus = false) {
+            if (this.open && this.beside === item) return focus && this.focusSearch()
             this.close()
             this.open = document.getElementById(item.dataset.barSubmenu)
             this.beside = item
             this.js().show(this.open)
             this.position()
+            if (focus) this.focusSearch()
+          },
+          focusSearch() {
+            this.open?.querySelector("[data-bar-option-search]")?.focus()
+          },
+          narrow(input) {
+            const dropdown = input.closest("[data-bar-dropdown]")
+            const term = input.value.trim().toLowerCase()
+            let any = false
+            dropdown.querySelectorAll("[data-bar-option]").forEach((option) => {
+              const match = term === "" || option.textContent.toLowerCase().includes(term)
+              option.style.display = match ? "" : "none"
+              any = any || match
+            })
+            const none = dropdown.querySelector("[data-bar-no-match]")
+            if (none) none.style.display = any ? "none" : ""
           },
           close() {
             if (!this.open) return
+            this.open.querySelectorAll("[data-bar-option-search]").forEach((input) => {
+              input.value = ""
+              this.narrow(input)
+            })
             this.anchor()?.removeAttribute("data-open")
             this.js().hide(this.open)
             this.open = null
@@ -396,17 +428,23 @@ defmodule Cinder.FilterBar do
   attr :theme, :map, required: true
 
   defp body(%{filter: %{type: :select}} = assigns) do
+    rows = select_rows(assigns.filter)
+    assigns = assign(assigns, rows: rows, searchable?: length(rows) > @searchable_from)
+
     ~H"""
+    <.option_search :if={@searchable?} theme={@theme} />
     <div data-close-on-pick>
       <label
-        :for={{label, value} <- select_rows(@filter)}
+        :for={{label, value} <- @rows}
         class={@theme.filter_bar_option_class}
         data-key="filter_bar_option_class"
+        data-bar-option
       >
         <input type="radio" name={@filter.name} value={to_string(value)} checked={to_string(value) == chosen_value(@filter)} class="sr-only" />
         <.icon name={:check} class={[@theme.filter_bar_icon_class, to_string(value) != chosen_value(@filter) && "invisible"]} />
         {label}
       </label>
+      <.no_match :if={@searchable?} theme={@theme} />
     </div>
     """
   end
@@ -468,11 +506,16 @@ defmodule Cinder.FilterBar do
   end
 
   defp body(%{filter: %{type: :multi_select}} = assigns) do
+    rows = option_list(assigns.filter)
+    assigns = assign(assigns, rows: rows, searchable?: length(rows) > @searchable_from)
+
     ~H"""
+    <.option_search :if={@searchable?} theme={@theme} />
     <label
-      :for={{label, value} <- option_list(@filter)}
+      :for={{label, value} <- @rows}
       class={@theme.filter_bar_option_class}
       data-key="filter_bar_option_class"
+      data-bar-option
     >
       <input
         type="checkbox"
@@ -484,6 +527,7 @@ defmodule Cinder.FilterBar do
       />
       {label}
     </label>
+    <.no_match :if={@searchable?} theme={@theme} />
     """
   end
 
@@ -514,6 +558,36 @@ defmodule Cinder.FilterBar do
     <div class={@theme.filter_bar_inputs_class} data-key="filter_bar_inputs_class">
       <.own_input filter={@filter} controls={@controls} />
     </div>
+    """
+  end
+
+  attr :theme, :map, required: true
+
+  # `form` names no form, so LiveView sees no form to send: typing only narrows the list.
+  defp option_search(assigns) do
+    ~H"""
+    <div class={@theme.filter_bar_inputs_class} data-key="filter_bar_inputs_class">
+      <input
+        type="text"
+        form="cinder-filter-bar-option-search"
+        data-bar-option-search
+        autocomplete="off"
+        placeholder={dgettext("cinder", "Search...")}
+        aria-label={dgettext("cinder", "Search...")}
+        class={@theme.filter_text_input_class}
+        data-key="filter_text_input_class"
+      />
+    </div>
+    """
+  end
+
+  attr :theme, :map, required: true
+
+  defp no_match(assigns) do
+    ~H"""
+    <p class={@theme.filter_bar_option_class} data-key="filter_bar_option_class" data-bar-no-match style="display: none">
+      {dgettext("cinder", "No results found")}
+    </p>
     """
   end
 

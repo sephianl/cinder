@@ -185,6 +185,30 @@ defmodule Cinder.FilterBarTest do
     assert html =~ ~s(type="hidden" name="filters[bin]" value="RACK-9")
   end
 
+  describe "a long list of options" do
+    @many for n <- 1..12, do: {"Option #{n}", "o#{n}"}
+
+    test "gets a search field above it that stays out of the form, and keeps every option" do
+      for type <- [:select, :multi_select] do
+        html =
+          render_bar([
+            filter("pick", type, if(type == :select, do: "", else: []), options: [options: @many])
+          ])
+
+        assert html =~ "data-bar-option-search"
+        assert html =~ ~s(form="cinder-filter-bar-option-search")
+        refute html =~ ~r/data-bar-option-search[^>]*name=/
+        assert length(Regex.scan(~r/ data-bar-option[ >]/, html)) >= 12
+      end
+    end
+
+    test "a short one does not" do
+      html = render_bar([filter("status", :select, "", options: @status_options)])
+
+      refute html =~ "data-bar-option-search"
+    end
+  end
+
   test "a number range summarises an open end" do
     assert FilterBar.summary_text(filter("age", :number_range, %{min: "18", max: ""})) == "≥ 18"
     assert FilterBar.summary_text(filter("age", :number_range, %{min: "", max: "65"})) == "≤ 65"
