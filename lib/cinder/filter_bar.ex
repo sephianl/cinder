@@ -7,6 +7,10 @@ defmodule Cinder.FilterBar do
   filters in use are, and the rest wait behind a "Filter" menu — the job the
   "Edit filters" drawer does for the row layout, which the bar leaves out.
 
+  A filter declared `filter_default_visible: false` is never offered — not as a
+  pill, not in the menu — and shows only once something (a link, the URL) sets
+  it: the place for filters a page is reached through rather than one picked.
+
   Every filter's inputs stay in Cinder's form, inside its (hidden) dropdown, so
   the bar submits the params the row would and URL sync, state storage and
   query building are untouched.
@@ -16,6 +20,11 @@ defmodule Cinder.FilterBar do
   the browser resolves to fixed dates in the reader's own calendar, so a URL
   keeps meaning the days it was made on. Every other type, custom filters
   included, renders its own input inside the dropdown.
+
+  A filter module that declares `inline?/0` renders its own input straight in
+  the bar, inside a pill beside its label: no dropdown, never in the menu. Every
+  input the bar renders gets `in_bar?: true` among its assigns, so a filter can
+  size its control to sit inside a pill.
 
   Dates in a pill render as `<time datetime="…" data-precision="day_month">`
   with the ISO date as text, for the host app's script to format.
@@ -35,16 +44,22 @@ defmodule Cinder.FilterBar do
   attr :controls, :map, required: true
 
   def render(assigns) do
-    filters = Enum.map(assigns.controls.filters, fn {_key, filter} -> filter end)
-    all_shown? = length(filters) <= @always_shown
+    {inline, filters} =
+      assigns.controls.filters
+      |> Enum.map(fn {_key, filter} -> filter end)
+      |> Enum.split_with(&inline?/1)
+
+    all_shown? = Enum.count(filters, &offered?/1) <= @always_shown
 
     assigns =
       assign(assigns,
         bar_id: "#{assigns.controls.table_id}-filter-bar",
         theme: assigns.controls.theme,
         filters: filters,
+        inline: Enum.filter(inline, &(offered?(&1) or active?(&1))),
         all_shown?: all_shown?,
-        in_menu: if(all_shown?, do: [], else: Enum.reject(filters, &active?/1))
+        in_menu:
+          if(all_shown?, do: [], else: Enum.filter(filters, &(offered?(&1) and not active?(&1))))
       )
 
     ~H"""
@@ -94,7 +109,7 @@ defmodule Cinder.FilterBar do
             this.el.addEventListener("click", this.onClick)
             this.el.addEventListener("mouseover", this.onHover)
             this.el.addEventListener("change", (event) => {
-              if (!event.target.closest("[data-close-on-pick]")) return
+              if (event.target.type !== "radio" && !event.target.closest("[data-close-on-pick]")) return
               this.close()
               this.hideMenu()
             })
@@ -217,8 +232,18 @@ defmodule Cinder.FilterBar do
         bar_id={@bar_id}
         theme={@theme}
         target={@controls.target}
-        always_shown?={@all_shown?}
+        always_shown?={@all_shown? and offered?(filter)}
       />
+
+      <div
+        :for={filter <- @inline}
+        class={@theme.filter_bar_inline_class}
+        data-key="filter_bar_inline_class"
+        data-active={active?(filter)}
+      >
+        <span class={@theme.filter_bar_pill_label_class} data-key="filter_bar_pill_label_class">{filter.label}</span>
+        <.own_input filter={filter} controls={@controls} />
+      </div>
 
       <div :if={@in_menu != []} class="relative">
         <button
@@ -386,6 +411,62 @@ defmodule Cinder.FilterBar do
     """
   end
 
+  defp body(%{filter: %{type: :autocomplete}} = assigns) do
+    options = Keyword.get(assigns.filter.options || [], :options, [])
+    max_results = Keyword.get(assigns.filter.options || [], :max_results, 10)
+    search_key = "#{assigns.filter.field}_autocomplete_search"
+    term = Map.get(assigns.controls.raw_filter_params, search_key, "")
+    matches = options |> Enum.filter(&matches?(&1, term)) |> Enum.take(max_results)
+    current = to_string(assigns.filter.value)
+
+    assigns =
+      assign(assigns,
+        search_name: "filters[#{search_key}]",
+        term: term,
+        matches: matches,
+        more?: length(matches) == max_results and length(options) > max_results,
+        current: current,
+        keep_current?:
+          current != "" and current not in Enum.map(matches, &to_string(elem(&1, 1))),
+        placeholder:
+          Keyword.get(
+            assigns.filter.options || [],
+            :placeholder,
+            dgettext("cinder", "Search %{label}...", label: assigns.filter.label)
+          )
+      )
+
+    ~H"""
+    <div class={@theme.filter_bar_inputs_class} data-key="filter_bar_inputs_class">
+      <input
+        type="text"
+        name={@search_name}
+        value={@term}
+        placeholder={@placeholder}
+        aria-label={@placeholder}
+        autocomplete="off"
+        phx-debounce="300"
+        class={@theme.filter_text_input_class}
+        data-key="filter_text_input_class"
+      />
+    </div>
+    <div data-close-on-pick>
+      <input :if={@keep_current?} type="hidden" name={@filter.name} value={@current} />
+      <label :for={{label, value} <- @matches} class={@theme.filter_bar_option_class} data-key="filter_bar_option_class">
+        <input type="radio" name={@filter.name} value={to_string(value)} checked={to_string(value) == @current} class="sr-only" />
+        <.icon name={:check} class={[@theme.filter_bar_icon_class, to_string(value) != @current && "invisible"]} />
+        {label}
+      </label>
+      <p :if={@matches == []} class={@theme.filter_bar_option_class} data-key="filter_bar_option_class">
+        {dgettext("cinder", "No results found")}
+      </p>
+      <p :if={@more?} class={[@theme.filter_bar_option_class, "text-xs italic"]} data-key="filter_bar_option_class">
+        {dgettext("cinder", "Type to search more options...")}
+      </p>
+    </div>
+    """
+  end
+
   defp body(%{filter: %{type: :multi_select}} = assigns) do
     ~H"""
     <label
@@ -451,7 +532,8 @@ defmodule Cinder.FilterBar do
       table_id: assigns.controls.table_id,
       target: assigns.controls.target,
       filter_values: assigns.controls.filter_values,
-      raw_filter_params: assigns.controls.raw_filter_params
+      raw_filter_params: assigns.controls.raw_filter_params,
+      in_bar?: true
     }
 
     module = Registry.get_filter(assigns.filter.type) || Registry.get_filter(:text)
@@ -558,6 +640,20 @@ defmodule Cinder.FilterBar do
   @spec active?(map()) :: boolean()
   def active?(%{value: value}),
     do: value not in [nil, "", [], %{from: "", to: ""}, %{min: "", max: ""}]
+
+  defp matches?(_option, ""), do: true
+
+  defp matches?({label, _value}, term),
+    do: label |> to_string() |> String.downcase() |> String.contains?(String.downcase(term))
+
+  defp offered?(filter), do: Map.get(filter, :offered?, true)
+
+  defp inline?(%{type: type}) do
+    module = Registry.get_filter(type)
+
+    module != nil and Code.ensure_loaded?(module) and function_exported?(module, :inline?, 0) and
+      module.inline?()
+  end
 
   defp option_list(%{options: options}), do: Keyword.get(options || [], :options, [])
 

@@ -85,6 +85,7 @@ msgstr "Maks"
 msgid "Min"
 msgstr "Min"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/autocomplete.ex
 #, elixir-autogen, elixir-format
 msgid "Search %{label}..."
@@ -142,6 +143,7 @@ msgid "No options available"
 msgstr "Ingen muligheder tilgængelige"
 
 #: lib/cinder/collection.ex
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/autocomplete.ex
 #, elixir-autogen, elixir-format
 msgid "No results found"
@@ -165,6 +167,7 @@ msgstr "Falsk"
 msgid "True"
 msgstr "Sand"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/autocomplete.ex
 #, elixir-autogen, elixir-format
 msgid "Type to search more options..."

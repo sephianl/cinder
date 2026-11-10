@@ -322,7 +322,16 @@ defmodule Cinder.Filter do
   """
   @callback summary(value :: any(), column()) :: String.t() | nil
 
-  @optional_callbacks summary: 2
+  @doc """
+  Whether a `show_filters: :bar` renders this filter's own input straight in the
+  bar, beside its label, rather than as a pill that opens a dropdown — for a
+  control compact enough that a click to reach it would be one click too many.
+
+  Optional; without it the filter is a pill.
+  """
+  @callback inline?() :: boolean()
+
+  @optional_callbacks summary: 2, inline?: 0
 
   # Shared utility functions
 

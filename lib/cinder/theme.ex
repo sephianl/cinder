@@ -231,6 +231,8 @@ defmodule Cinder.Theme do
     # filter holds a value, and a date shortcut `data-chosen` while it is the
     # range the filter holds, for `data-[active]:` / `data-[chosen]:` variants.
     filter_bar_class: "flex flex-wrap items-center gap-2",
+    filter_bar_inline_class:
+      "flex h-8 items-center gap-2 rounded-full border border-gray-300 bg-white pl-3 pr-0.5 text-sm data-[active]:border-gray-400",
     filter_bar_search_class:
       "flex h-8 w-72 items-center gap-2 rounded-full border border-gray-300 bg-white px-3 text-sm text-gray-900 focus-within:border-blue-500",
     filter_bar_search_input_class:

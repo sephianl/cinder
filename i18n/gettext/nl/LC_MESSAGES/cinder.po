@@ -85,6 +85,7 @@ msgstr "Max"
 msgid "Min"
 msgstr "Min"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/autocomplete.ex
 #, elixir-autogen, elixir-format
 msgid "Search %{label}..."
@@ -142,6 +143,7 @@ msgid "No options available"
 msgstr "Geen opties beschikbaar"
 
 #: lib/cinder/collection.ex
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/autocomplete.ex
 #, elixir-autogen, elixir-format
 msgid "No results found"
@@ -165,6 +167,7 @@ msgstr "Onwaar"
 msgid "True"
 msgstr "Waar"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/autocomplete.ex
 #, elixir-autogen, elixir-format
 msgid "Type to search more options..."

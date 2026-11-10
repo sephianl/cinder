@@ -83,6 +83,31 @@ defmodule Cinder.FilterBarTest do
     tag
   end
 
+  test "a filter not offered stays out of the bar until something sets it" do
+    unit = fn value -> Map.put(filter("unit", :text, value), :offered?, false) end
+
+    html = render_bar([filter("status", :select, "", options: @status_options), unit.("")])
+    assert pill_tag(html, "unit") =~ ~r/ data-hidden[ >]/
+    refute pill_tag(html, "status") =~ ~r/ data-hidden[ >]/
+
+    html = render_bar([filter("status", :select, "", options: @status_options), unit.("su-1")])
+    refute pill_tag(html, "unit") =~ ~r/ data-hidden[ >]/
+  end
+
+  test "a filter not offered is left out of the menu and the count" do
+    filters = [
+      filter("status", :select, "", options: @status_options),
+      filter("name", :text, ""),
+      filter("email", :text, ""),
+      Map.put(filter("unit", :text, ""), :offered?, false)
+    ]
+
+    html = render_bar(filters)
+
+    refute html =~ ~s(id="t-filter-bar-add")
+    refute pill_tag(html, "email") =~ ~r/ data-hidden[ >]/
+  end
+
   test "an active pill shows the option's label and a clear button" do
     html = render_bar([filter("status", :select, "archived", options: @status_options)])
 
@@ -140,6 +165,24 @@ defmodule Cinder.FilterBarTest do
 
     assert html =~ ~s(data-cinder-range="today")
     refute html =~ ~s(data-cinder-range="last_week")
+  end
+
+  test "an autocomplete lists its matches in the dropdown itself, under the search field" do
+    options = [options: [{"BIN-001", "BIN-001"}, {"BIN-002", "BIN-002"}, {"RACK-9", "RACK-9"}]]
+    bins = filter("bin", :autocomplete, "RACK-9", options: options)
+
+    controls =
+      [bins]
+      |> controls([])
+      |> Map.put(:raw_filter_params, %{"bin_autocomplete_search" => "bin"})
+
+    html = render_component(&FilterBar.render/1, controls: controls)
+
+    assert html =~ ~s(name="filters[bin_autocomplete_search]")
+    assert html =~ ~s(type="radio" name="filters[bin]" value="BIN-001")
+    assert html =~ ~s(type="radio" name="filters[bin]" value="BIN-002")
+    refute html =~ ~s(type="radio" name="filters[bin]" value="RACK-9")
+    assert html =~ ~s(type="hidden" name="filters[bin]" value="RACK-9")
   end
 
   test "a number range summarises an open end" do
