@@ -225,7 +225,43 @@ defmodule Cinder.Theme do
     filter_prefs_container_class: "cinder-filter-prefs",
     filter_prefs_button_class:
       "inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded text-gray-900 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:border-gray-700 dark:hover:bg-gray-700",
-    filter_prefs_button_icon_class: "w-4 h-4"
+    filter_prefs_button_icon_class: "w-4 h-4",
+
+    # Filter bar (`show_filters: :bar`). A pill carries `data-active` while its
+    # filter holds a value, and a date shortcut `data-chosen` while it is the
+    # range the filter holds, for `data-[active]:` / `data-[chosen]:` variants.
+    filter_bar_class: "flex flex-wrap items-center gap-2",
+    filter_bar_inline_class:
+      "flex h-8 items-center gap-2 rounded-full border border-gray-300 bg-white pl-3 pr-0.5 text-sm data-[active]:border-gray-400",
+    filter_bar_search_class:
+      "flex h-8 w-72 items-center gap-2 rounded-full border border-gray-300 bg-white px-3 text-sm text-gray-900 focus-within:border-blue-500",
+    filter_bar_search_input_class:
+      "h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm placeholder:text-gray-400 focus:ring-0 focus:outline-none",
+    filter_bar_pill_class:
+      "flex h-8 items-center rounded-full border border-gray-300 bg-white text-sm text-gray-900 data-[active]:border-gray-400",
+    filter_bar_pill_button_class:
+      "flex h-full items-center gap-1.5 rounded-full px-3 hover:bg-gray-100",
+    filter_bar_pill_label_class: "text-gray-500",
+    filter_bar_pill_value_class: "max-w-56 truncate font-medium",
+    filter_bar_pill_clear_class:
+      "flex h-full items-center rounded-r-full pr-2.5 pl-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900",
+    filter_bar_icon_class: "h-3.5 w-3.5 shrink-0",
+    filter_bar_add_class:
+      "flex h-8 items-center gap-1 rounded-full border border-dashed border-gray-300 px-3 text-sm text-gray-500 hover:bg-gray-100",
+    filter_bar_menu_class:
+      "absolute top-9 left-0 z-40 min-w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg",
+    filter_bar_menu_item_class:
+      "flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-sm text-gray-900 hover:bg-gray-100",
+    filter_bar_dropdown_class:
+      "absolute z-40 min-w-56 max-h-96 overflow-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg",
+    filter_bar_option_class:
+      "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-900 hover:bg-gray-100",
+    filter_bar_checkbox_class: "h-4 w-4 rounded border-gray-300",
+    filter_bar_shortcuts_class: "grid grid-cols-2 gap-x-1",
+    filter_bar_shortcut_class:
+      "rounded px-2 py-1.5 text-left text-sm text-gray-900 hover:bg-gray-100 data-[chosen]:bg-gray-100 data-[chosen]:font-medium",
+    filter_bar_inputs_class:
+      "p-2 [&:not(:first-child)]:mt-1 [&:not(:first-child)]:border-t border-gray-200"
   }
 
   # Re-export the DSL functionality

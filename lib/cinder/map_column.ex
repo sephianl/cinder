@@ -208,6 +208,14 @@ defmodule Cinder.MapColumn do
 
   defp date_bound(query, _source, _key, _mode, _op, bound) when bound in [nil, ""], do: query
 
+  # Postgrex will not encode a string as a `date` parameter, so bind a `Date`.
+  defp date_bound(query, source, key, mode, op, bound) when is_binary(bound) do
+    case bound |> String.slice(0, 10) |> Date.from_iso8601() do
+      {:ok, date} -> date_bound(query, source, key, mode, op, date)
+      {:error, _reason} -> query
+    end
+  end
+
   defp date_bound(query, source, key, :scalar, ">=", bound) do
     import Ash.Expr
     Ash.Query.filter(query, fragment("(? ->> ?)::date >= ?::date", ^ref(source), ^key, ^bound))

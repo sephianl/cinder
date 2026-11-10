@@ -61,9 +61,28 @@ defmodule Cinder.FilterManager do
 
     cond do
       controls_slot != [] -> render_filter_controls_with_slot(assigns, controls_slot)
+      Map.get(assigns, :filter_mode) == :bar -> render_filter_controls_bar(assigns)
       collapsible -> render_filter_controls_collapsible(assigns)
       true -> render_filter_controls_row(assigns)
     end
+  end
+
+  defp render_filter_controls_bar(assigns) do
+    controls_data = Cinder.Controls.build_controls_data(assigns)
+    has_content = controls_data.filters != [] or controls_data.search != nil
+
+    assigns =
+      assigns
+      |> assign(:controls_data, controls_data)
+      |> assign(:has_content, has_content)
+
+    ~H"""
+    <.filter_container :if={@has_content} table_id={@table_id} theme={@theme}>
+      <form id={"#{@table_id}-filters"} phx-change="filter_change" phx-submit="filter_change" phx-target={@target}>
+        <Cinder.FilterBar.render controls={@controls_data} />
+      </form>
+    </.filter_container>
+    """
   end
 
   defp render_filter_controls_row(assigns) do

@@ -11,6 +11,7 @@ msgstr ""
 "Language: da\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filter_manager.ex
 #, elixir-autogen
 msgid "Clear filter"
@@ -84,6 +85,7 @@ msgstr "Maks"
 msgid "Min"
 msgstr "Min"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/autocomplete.ex
 #, elixir-autogen, elixir-format
 msgid "Search %{label}..."
@@ -99,6 +101,7 @@ msgstr "Vis {selector} per side"
 msgid "To"
 msgstr "Til"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filter_manager.ex
 #: lib/cinder/filters/select.ex
 #, elixir-autogen, elixir-format
@@ -113,6 +116,7 @@ msgstr "Søg"
 
 #: lib/cinder/collection.ex
 #: lib/cinder/controls.ex
+#: lib/cinder/filter_bar.ex
 #, elixir-autogen, elixir-format
 msgid "Search..."
 msgstr "Søg..."
@@ -123,6 +127,7 @@ msgid "Select options..."
 msgstr "Vælg muligheder..."
 
 #: lib/cinder/controls.ex
+#: lib/cinder/filter_bar.ex
 #, elixir-autogen, elixir-format
 msgid "Clear search"
 msgstr "Ryd søgning"
@@ -139,26 +144,31 @@ msgid "No options available"
 msgstr "Ingen muligheder tilgængelige"
 
 #: lib/cinder/collection.ex
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/autocomplete.ex
 #, elixir-autogen, elixir-format
 msgid "No results found"
 msgstr "Ingen resultater fundet"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/multi_select.ex
 #, elixir-autogen, elixir-format
 msgid "%{count} selected"
 msgstr "%{count} valgt"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/boolean.ex
 #, elixir-autogen, elixir-format
 msgid "False"
 msgstr "Falsk"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/boolean.ex
 #, elixir-autogen, elixir-format
 msgid "True"
 msgstr "Sand"
 
+#: lib/cinder/filter_bar.ex
 #: lib/cinder/filters/autocomplete.ex
 #, elixir-autogen, elixir-format
 msgid "Type to search more options..."
@@ -223,4 +233,54 @@ msgstr "Viser {range} af %{total} elementer"
 #: lib/cinder/renderers/pagination.ex
 #, elixir-autogen, elixir-format
 msgid "Showing {range} items"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Filter"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Last month"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Last week"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Past 30 days"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Past 7 days"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "This month"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "This week"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Today"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Tomorrow"
+msgstr ""
+
+#: lib/cinder/filter_bar.ex
+#, elixir-autogen, elixir-format
+msgid "Yesterday"
 msgstr ""

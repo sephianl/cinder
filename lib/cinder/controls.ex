@@ -103,6 +103,7 @@ defmodule Cinder.Controls do
            type: column.filter_type,
            value: current_value,
            clearable?: FilterManager.clearable?(column, Map.get(assigns.filters, column.field)),
+           offered?: Map.get(column, :filter_default_visible, true) != false,
            options: column.filter_options,
            name: "filters[#{column.field}]",
            id: filter_id(assigns.table_id, column.field)

@@ -188,7 +188,8 @@ defmodule Cinder.Collection do
     default: nil,
     doc:
       "Controls filter visibility. true = always visible, false = hidden, nil = auto-detect, " <>
-        ":toggle/\"toggle\" = collapsible starting collapsed, :toggle_open/\"toggle_open\" = collapsible starting expanded. " <>
+        ":toggle/\"toggle\" = collapsible starting collapsed, :toggle_open/\"toggle_open\" = collapsible starting expanded, " <>
+        ":bar/\"bar\" = every filter as a pill with its value in a dropdown, and above three filters only those in use, the rest behind a menu (see `Cinder.FilterBar`). " <>
         "Can also be set globally via `config :cinder, show_filters: :toggle`."
   )
 
@@ -996,6 +997,7 @@ defmodule Cinder.Collection do
 
   defp normalize_show_filters("toggle"), do: :toggle
   defp normalize_show_filters("toggle_open"), do: :toggle_open
+  defp normalize_show_filters("bar"), do: :bar
   defp normalize_show_filters(other), do: other
 
   defp determine_initial_load(assigns) do
@@ -1070,6 +1072,7 @@ defmodule Cinder.Collection do
       true -> has_content
       :toggle -> if has_content, do: :toggle, else: false
       :toggle_open -> if has_content, do: :toggle_open, else: false
+      :bar -> if has_content, do: :bar, else: false
       # nil = auto-detect (backwards compat)
       _ -> has_content
     end
