@@ -19,6 +19,7 @@
 * Select filters accept `prompt_value`, which makes the prompt a choice of its own: it is kept in the URL, a `default:` no longer replaces it, and it narrows nothing.
 * The controls data gives each filter a `clearable?` flag, false while clearing it would change nothing.
 * Any filter accepts `clearable: false`, for a filter that scopes the collection rather than narrowing it: it shows no ×, never counts towards "Clear all", and still takes its `default:` back on reset.
+* Shift-clicking a row selects or clears every row between it and the last row clicked, when the host's `LiveSocket` sends `shiftKey` in its click metadata. See [Shift-Click Range Selection](docs/advanced.md#shift-click-range-selection).
 
 ### Bugfixes
 

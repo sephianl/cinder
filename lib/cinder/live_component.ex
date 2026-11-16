@@ -529,26 +529,20 @@ defmodule Cinder.LiveComponent do
   # ============================================================================
 
   @impl true
-  def handle_event("toggle_select", %{"id" => id}, socket) do
-    selected_ids = socket.assigns.selected_ids
+  # `shiftKey` arrives only when the host's LiveSocket sends click metadata; without it
+  # every click is a plain toggle
+  def handle_event("toggle_select", %{"id" => id, "shiftKey" => true}, socket) do
+    id_field = socket.assigns[:id_field] || :id
+    anchor = socket.assigns[:selection_anchor]
 
-    new_selected =
-      cond do
-        MapSet.member?(selected_ids, id) -> MapSet.delete(selected_ids, id)
-        id_selectable?(socket, id) -> MapSet.put(selected_ids, id)
-        true -> selected_ids
-      end
-
-    if MapSet.equal?(new_selected, selected_ids) do
-      {:noreply, socket}
-    else
-      socket =
-        socket
-        |> assign(:selected_ids, new_selected)
-        |> notify_selection_change(:toggle)
-
-      {:noreply, socket}
+    case Cinder.Selection.range_items(socket.assigns.data, id_field, anchor, id) do
+      nil -> {:noreply, toggle_one(socket, id)}
+      items -> {:noreply, apply_range(socket, items, anchor, id)}
     end
+  end
+
+  def handle_event("toggle_select", %{"id" => id}, socket) do
+    {:noreply, toggle_one(socket, id)}
   end
 
   @impl true
@@ -906,6 +900,54 @@ defmodule Cinder.LiveComponent do
   defp page_count(%Ash.Page.Keyset{count: count}), do: count
   defp page_count(%{results: results}) when is_list(results), do: length(results)
   defp page_count(_page), do: nil
+
+  defp toggle_one(socket, id) do
+    selected_ids = socket.assigns.selected_ids
+
+    new_selected =
+      cond do
+        MapSet.member?(selected_ids, id) -> MapSet.delete(selected_ids, id)
+        id_selectable?(socket, id) -> MapSet.put(selected_ids, id)
+        true -> selected_ids
+      end
+
+    if MapSet.equal?(new_selected, selected_ids) do
+      socket
+    else
+      socket
+      |> assign(:selected_ids, new_selected)
+      |> assign(:selection_anchor, id)
+      |> notify_selection_change(:toggle)
+    end
+  end
+
+  # The range takes the anchor's state, as in a file manager: extending from a
+  # selected row selects, extending from a deselected row deselects
+  defp apply_range(socket, items, anchor, id) do
+    selectable = socket.assigns[:selectable] || false
+    id_field = socket.assigns[:id_field] || :id
+    selected_ids = socket.assigns.selected_ids
+
+    new_selected =
+      if MapSet.member?(selected_ids, anchor) do
+        items
+        |> Enum.filter(&Cinder.Selection.item_selectable?(selectable, &1))
+        |> MapSet.new(&to_string(Map.get(&1, id_field)))
+        |> MapSet.union(selected_ids)
+      else
+        MapSet.difference(selected_ids, MapSet.new(items, &to_string(Map.get(&1, id_field))))
+      end
+
+    socket = assign(socket, :selection_anchor, id)
+
+    if MapSet.equal?(new_selected, selected_ids) do
+      socket
+    else
+      socket
+      |> assign(:selected_ids, new_selected)
+      |> notify_selection_change(:range)
+    end
+  end
 
   # The checkbox is only disabled client-side for non-selectable rows, and the
   # client can send arbitrary ids — re-check against the served page data.
