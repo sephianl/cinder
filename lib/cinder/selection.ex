@@ -51,4 +51,22 @@ defmodule Cinder.Selection do
   def item_toggleable?(selectable, selected_ids, item, id_field) do
     item_selectable?(selectable, item) or item_selected?(selected_ids, item, id_field)
   end
+
+  @doc """
+  Returns the items from `from_id` to `to_id`, inclusive and in display order.
+
+  Returns `nil` when there is no anchor or either end is not on the current
+  page, so a shift-click after paging or filtering falls back to a plain toggle
+  instead of changing rows the user cannot see.
+  """
+  def range_items(_data, _id_field, nil, _to_id), do: nil
+
+  def range_items(data, id_field, from_id, to_id) do
+    ids = Enum.map(data, &to_string(Map.get(&1, id_field)))
+
+    with from when is_integer(from) <- Enum.find_index(ids, &(&1 == from_id)),
+         to when is_integer(to) <- Enum.find_index(ids, &(&1 == to_id)) do
+      Enum.slice(data, min(from, to)..max(from, to)//1)
+    end
+  end
 end

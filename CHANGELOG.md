@@ -9,6 +9,7 @@
 
 ### Features
 
+* Shift-clicking a row selects or clears every row between it and the last row clicked, when the host's `LiveSocket` sends `shiftKey` in its click metadata. See [Shift-Click Range Selection](docs/advanced.md#shift-click-range-selection).
 * Added `initial_load={:sync}`, which puts the first page of data in the server-rendered HTML. Thanks @Alt-iOS! ([#203](https://github.com/sevenseacat/cinder/pull/203))
 * `on_query_change` payloads now carry a `count` key with the total matching records, so parents no longer need their own `Ash.count!`. Thanks @mbaertschi! ([#208](https://github.com/sevenseacat/cinder/pull/208))
 * `refresh_table/3` and `refresh_tables/3` accept `silent: true`, which keeps the current rows on screen without a loading indicator while the refresh runs. Thanks @Alt-iOS! ([#226](https://github.com/sevenseacat/cinder/pull/226))

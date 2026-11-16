@@ -733,6 +733,23 @@ effect.
 </Cinder.collection>
 ```
 
+### Shift-Click Range Selection
+
+Shift-clicking a row selects every row between it and the last row clicked, on the current page. The range takes the state of the row clicked first: extending from a selected row selects the range, extending from a deselected row clears it. Rows that are not selectable are skipped.
+
+Cinder reads the shift key from LiveView's click metadata, which LiveView only sends when your `LiveSocket` asks for it:
+
+```javascript
+let liveSocket = new LiveSocket("/live", Socket, {
+  // ...
+  metadata: {
+    click: (e) => ({ shiftKey: e.shiftKey }),
+  },
+})
+```
+
+Without it, a shift-click toggles a single row like any other click.
+
 ### Bulk Action Slots
 
 Define bulk actions using the `bulk_action` slot. There are two ways to render bulk action buttons:
@@ -891,7 +908,7 @@ You can also track selection state in your parent LiveView. This is not necessar
 ```elixir
 def handle_info({:selection_changed, payload}, socket) do
   # payload contains: %{selected_ids, selected_count, component_id, action}
-  # action is one of: :select, :deselect, :select_all, :clear, :remove
+  # action is one of: :toggle, :range, :select_all, :clear, :remove
   {:noreply, assign(socket, :selected_count, payload.selected_count)}
 end
 ```

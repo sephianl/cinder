@@ -182,6 +182,99 @@ defmodule Cinder.SelectionTest do
     end
   end
 
+  describe "toggle_select event with shiftKey" do
+    defp rows(n), do: Enum.map(1..n, &%{id: "user-#{&1}", status: :active})
+
+    defp click(socket, id, shift?) do
+      {:noreply, socket} =
+        LiveComponent.handle_event("toggle_select", %{"id" => id, "shiftKey" => shift?}, socket)
+
+      socket
+    end
+
+    test "selects every row between the anchor and the clicked row" do
+      socket =
+        %{id: "test-table", selectable: true, data: rows(5), on_selection_change: :changed}
+        |> make_socket()
+        |> click("user-2", false)
+        |> click("user-4", true)
+
+      assert socket.assigns.selected_ids == MapSet.new(["user-2", "user-3", "user-4"])
+      assert_received {:changed, %{action: :range, selected_count: 3}}
+    end
+
+    test "works upwards from the anchor" do
+      socket =
+        %{id: "test-table", selectable: true, data: rows(5)}
+        |> make_socket()
+        |> click("user-4", false)
+        |> click("user-1", true)
+
+      assert socket.assigns.selected_ids ==
+               MapSet.new(["user-1", "user-2", "user-3", "user-4"])
+    end
+
+    test "clears the range when the anchor was deselected" do
+      socket =
+        %{
+          id: "test-table",
+          selectable: true,
+          data: rows(5),
+          selected_ids: MapSet.new(["user-1", "user-2", "user-3", "user-4", "user-5"])
+        }
+        |> make_socket()
+        |> click("user-2", false)
+        |> click("user-4", true)
+
+      assert socket.assigns.selected_ids == MapSet.new(["user-1", "user-5"])
+    end
+
+    test "skips rows that are not selectable" do
+      data = [
+        %{id: "user-1", status: :active},
+        %{id: "user-2", status: :inactive},
+        %{id: "user-3", status: :active}
+      ]
+
+      socket =
+        %{id: "test-table", selectable: &(&1.status == :active), data: data}
+        |> make_socket()
+        |> click("user-1", false)
+        |> click("user-3", true)
+
+      assert socket.assigns.selected_ids == MapSet.new(["user-1", "user-3"])
+    end
+
+    test "chains from the last shift-clicked row" do
+      socket =
+        %{id: "test-table", selectable: true, data: rows(6)}
+        |> make_socket()
+        |> click("user-1", false)
+        |> click("user-2", true)
+        |> click("user-5", true)
+
+      assert MapSet.size(socket.assigns.selected_ids) == 5
+    end
+
+    test "toggles a single row when there is no anchor yet" do
+      socket =
+        %{id: "test-table", selectable: true, data: rows(5)}
+        |> make_socket()
+        |> click("user-4", true)
+
+      assert socket.assigns.selected_ids == MapSet.new(["user-4"])
+    end
+
+    test "toggles a single row when the anchor is no longer on the page" do
+      socket =
+        %{id: "test-table", selectable: true, data: rows(5), selection_anchor: "user-99"}
+        |> make_socket()
+        |> click("user-3", true)
+
+      assert socket.assigns.selected_ids == MapSet.new(["user-3"])
+    end
+  end
+
   describe "toggle_select_all_page event with predicate selectable" do
     test "selects only the selectable rows on the page" do
       socket =
