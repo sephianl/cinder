@@ -450,11 +450,14 @@ defmodule Cinder.FilterBar do
   end
 
   defp body(%{filter: %{type: :autocomplete}} = assigns) do
-    options = Keyword.get(assigns.filter.options || [], :options, [])
-    max_results = Keyword.get(assigns.filter.options || [], :max_results, 10)
+    filter_options = assigns.filter.options || []
+    max_results = Keyword.get(filter_options, :max_results, 10)
     search_key = "#{assigns.filter.field}_autocomplete_search"
     term = Map.get(assigns.controls.raw_filter_params, search_key, "")
-    matches = options |> Enum.filter(&matches?(&1, term)) |> Enum.take(max_results)
+
+    {matches, more?} =
+      Cinder.Filters.Autocomplete.matching_options(filter_options, term, max_results)
+
     current = to_string(assigns.filter.value)
 
     assigns =
@@ -462,7 +465,7 @@ defmodule Cinder.FilterBar do
         search_name: "filters[#{search_key}]",
         term: term,
         matches: matches,
-        more?: length(matches) == max_results and length(options) > max_results,
+        more?: more?,
         current: current,
         keep_current?:
           current != "" and current not in Enum.map(matches, &to_string(elem(&1, 1))),
@@ -714,11 +717,6 @@ defmodule Cinder.FilterBar do
   @spec active?(map()) :: boolean()
   def active?(%{value: value}),
     do: value not in [nil, "", [], %{from: "", to: ""}, %{min: "", max: ""}]
-
-  defp matches?(_option, ""), do: true
-
-  defp matches?({label, _value}, term),
-    do: label |> to_string() |> String.downcase() |> String.contains?(String.downcase(term))
 
   defp offered?(filter), do: Map.get(filter, :offered?, true)
 

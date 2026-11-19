@@ -9,8 +9,15 @@ defmodule Cinder.Filters.Autocomplete do
   ## Options
 
   - `:options` - List of `{label, value}` tuples (required for static mode)
+  - `:search` - A function from the typed term to `{label, value}` tuples (search mode)
+  - `:lookup` - A function from a chosen value to its label, or `nil` (search mode)
   - `:placeholder` - Placeholder text for the search input
   - `:max_results` - Maximum number of results to show (default: 10)
+
+  Search mode is for option lists too long to hold: the page renders only what
+  `:search` returns, so it never has to load or send every option. The table calls
+  `:search` and `:lookup` when the term or the chosen value changes, never while
+  rendering.
 
   ## Examples
 
@@ -21,6 +28,15 @@ defmodule Cinder.Filters.Autocomplete do
           options: [{"Electronics", 1}, {"Clothing", 2}, {"Books", 3}],
           max_results: 10,
           placeholder: "Search categories..."
+        ]}
+      />
+
+      # Search mode
+      <:col field={:customer_id} label="Customer"
+        filter={[
+          type: :autocomplete,
+          search: &MyApp.Customers.search_options/1,
+          lookup: &MyApp.Customers.option_label/1
         ]}
       />
   """
@@ -51,28 +67,7 @@ defmodule Cinder.Filters.Autocomplete do
     # Look up the display label for the current value
     current_label = find_label_for_value(all_options, current_value)
 
-    # Filter options based on search term
-    filtered_options =
-      if search_term == "" do
-        Enum.take(all_options, max_results)
-      else
-        all_options
-        |> Enum.filter(fn {label, _value} ->
-          String.contains?(String.downcase(to_string(label)), String.downcase(search_term))
-        end)
-        |> Enum.take(max_results)
-      end
-
-    has_more =
-      if search_term == "" do
-        length(all_options) > max_results
-      else
-        length(
-          Enum.filter(all_options, fn {label, _value} ->
-            String.contains?(String.downcase(to_string(label)), String.downcase(search_term))
-          end)
-        ) > max_results
-      end
+    {filtered_options, has_more} = matching_options(filter_options, search_term, max_results)
 
     # Sanitize field name for use in HTML attributes
     table_id = Map.get(assigns, :table_id)
@@ -206,6 +201,8 @@ defmodule Cinder.Filters.Autocomplete do
   def default_options do
     [
       options: [],
+      search: nil,
+      lookup: nil,
       placeholder: nil,
       max_results: @default_max_results
     ]
@@ -228,6 +225,95 @@ defmodule Cinder.Filters.Autocomplete do
 
     # Use the centralized helper which supports direct, relationship, and embedded fields
     Cinder.Filter.Helpers.build_ash_filter(query, field, value, :equals)
+  end
+
+  @doc """
+  The options to offer for `term`, at most `max_results` of them, and whether more match.
+  A search-mode filter's options already are the search's answer, so they are not
+  narrowed again by label.
+  """
+  def matching_options(filter_options, term, max_results) do
+    options = get_option(filter_options, :options, [])
+
+    matches =
+      if search_mode?(filter_options) or term == "",
+        do: options,
+        else: Enum.filter(options, &label_matches?(&1, term))
+
+    {Enum.take(matches, max_results), length(matches) > max_results}
+  end
+
+  defp label_matches?({label, _value}, term),
+    do: String.contains?(String.downcase(to_string(label)), String.downcase(term))
+
+  @doc false
+  def search_mode?(filter_options), do: is_function(Keyword.get(filter_options, :search), 1)
+
+  @doc """
+  Runs the search of every search-mode autocomplete column whose term or chosen value
+  changed since `previous`, and keeps the answer of the rest. Returns a map from field
+  to `{{term, value}, options}`; `fill_searched_options/2` puts those options on columns.
+  """
+  def search_options(columns, filters, raw_filter_params, previous) do
+    for %{filter_type: :autocomplete, filterable: true} = column <- columns,
+        search_mode?(column.filter_options),
+        into: %{} do
+      term = Map.get(raw_filter_params, "#{column.field}_autocomplete_search", "")
+      key = {term, chosen_value(filters, column.field)}
+
+      case Map.get(previous, column.field) do
+        {^key, _options} = kept -> {column.field, kept}
+        _changed -> {column.field, {key, searched(column.filter_options, key)}}
+      end
+    end
+  end
+
+  defp chosen_value(filters, field) do
+    case Map.get(filters, field) do
+      %{value: value} when value not in [nil, ""] -> to_string(value)
+      _none -> ""
+    end
+  end
+
+  defp searched(filter_options, {term, value}) do
+    found = Keyword.fetch!(filter_options, :search).(term)
+    with_chosen(found, value, Keyword.get(filter_options, :lookup))
+  end
+
+  defp with_chosen(found, "", _lookup), do: found
+
+  defp with_chosen(found, value, lookup) do
+    if Enum.any?(found, fn {_label, v} -> to_string(v) == value end) do
+      found
+    else
+      chosen_label(found, value, lookup)
+    end
+  end
+
+  defp chosen_label(found, value, lookup) when is_function(lookup, 1) do
+    case lookup.(value) do
+      nil -> found
+      text -> [{text, value} | found]
+    end
+  end
+
+  defp chosen_label(found, _value, _lookup), do: found
+
+  @doc """
+  Puts the options `search_options/4` found on the search-mode columns they belong to.
+  """
+  def fill_searched_options(columns, searched) when map_size(searched) == 0, do: columns
+
+  def fill_searched_options(columns, searched) do
+    Enum.map(columns, fn column ->
+      case Map.get(searched, column.field) do
+        {_key, options} when column.filter_type == :autocomplete ->
+          %{column | filter_options: Keyword.put(column.filter_options, :options, options)}
+
+        _other ->
+          column
+      end
+    end)
   end
 
   # Private helpers

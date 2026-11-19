@@ -56,6 +56,7 @@ upstream allows: every change here is one we re-apply on each upstream sync.
 | Column slots kept out of the async load task (it copied the host LiveView's assigns per column) | yes | yes | PR open (#250) |
 | Sticky horizontal scrollbar and edge flags for wide tables (`table_scroll_*_class`, `CinderTableScroll`) | | yes | Not planned |
 | JS hooks entry `createCinderHooks` (column and filter preferences, persistence) | yes | yes | Upstream uses colocated hooks; ours sits beside them |
+| Search-mode autocomplete filter (`search:` and `lookup:` instead of `options:`) | yes | | Not proposed |
 
 ### Deliberate differences in look
 

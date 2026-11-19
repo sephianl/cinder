@@ -159,6 +159,7 @@ defmodule Cinder.LiveComponent do
       |> maybe_schedule_force_hydrate()
       |> decode_url_state(assigns)
       |> seed_default_filters()
+      |> assign_searched_options()
       |> load_data_if_needed(prev_state)
       |> clear_selection_if_scope_changed(prev_state)
 
@@ -367,6 +368,7 @@ defmodule Cinder.LiveComponent do
         socket
         |> assign(:filters, new_filters)
         |> assign(:raw_filter_params, raw_filter_params)
+        |> assign_searched_options()
         |> assign(:current_page, 1)
         |> assign(:after_keyset, nil)
         |> assign(:before_keyset, nil)
@@ -412,6 +414,7 @@ defmodule Cinder.LiveComponent do
         socket
         |> assign(:filters, new_filters)
         |> assign(:search_term, "")
+        |> assign_searched_options()
         |> assign(:current_page, 1)
         |> assign(:after_keyset, nil)
         |> assign(:before_keyset, nil)
@@ -635,6 +638,7 @@ defmodule Cinder.LiveComponent do
       |> assign(:filters, new_filters)
       |> assign(:raw_filter_params, raw_filter_params)
       |> assign(:search_term, search_term)
+      |> assign_searched_options()
 
     # A change that leaves the filters and search as they were, such as typing in an
     # autocomplete filter's search box, only redraws the filters: no reset, no reload.
@@ -714,6 +718,7 @@ defmodule Cinder.LiveComponent do
       socket
       |> assign(:filters, new_filters)
       |> assign(:raw_filter_params, raw_filter_params)
+      |> assign_searched_options()
       |> assign(:current_page, 1)
       |> assign(:after_keyset, nil)
       |> assign(:before_keyset, nil)
@@ -1535,6 +1540,28 @@ defmodule Cinder.LiveComponent do
     else
       socket
     end
+  end
+
+  # Columns are rebuilt from the slots on every update, which drops the options a
+  # search-mode autocomplete found; the kept answers put them back without searching again.
+  defp assign_searched_options(socket) do
+    searched =
+      Cinder.Filters.Autocomplete.search_options(
+        socket.assigns.query_columns,
+        socket.assigns[:filters] || %{},
+        socket.assigns[:raw_filter_params] || %{},
+        socket.assigns[:searched_options] || %{}
+      )
+
+    fill = &Cinder.Filters.Autocomplete.fill_searched_options(&1, searched)
+
+    socket
+    |> assign(:searched_options, searched)
+    |> update(:query_columns, fill)
+    |> update(:columns, fill)
+    |> update(:filter_columns, fill)
+    |> update(:filter_prefs_columns, fill)
+    |> update(:filter_prefs_drawer_columns, fill)
   end
 
   defp assign_column_definitions(socket) do
