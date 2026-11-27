@@ -1339,11 +1339,21 @@ defmodule Cinder.QueryBuilder do
     ArgumentError -> :error
   end
 
-  # An attribute by name, or nil when there's no such attribute
+  # An attribute, or a database-level calculation, by name; nil when there's neither
   defp embedded_attribute(resource, name) do
     case existing_atom(name) do
-      {:ok, atom} -> Ash.Resource.Info.attribute(resource, atom)
-      :error -> nil
+      {:ok, atom} ->
+        Ash.Resource.Info.attribute(resource, atom) || sortable_calculation(resource, atom)
+
+      :error ->
+        nil
+    end
+  end
+
+  defp sortable_calculation(resource, name) do
+    case Ash.Resource.Info.calculation(resource, name) do
+      nil -> nil
+      calculation -> if calculation_sortable?(calculation), do: calculation
     end
   end
 

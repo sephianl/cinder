@@ -338,6 +338,29 @@ defmodule Cinder.FieldValidationTest do
              ) == true
     end
 
+    test "a map expression calculation takes nested fields like a map attribute" do
+      assert Cinder.QueryBuilder.validate_field_existence(
+               TestResourceForInference,
+               "metadata_copy__any_field"
+             ) == true
+
+      column =
+        Column.parse_column(
+          %{field: "metadata_copy__any_field", sortable: true, filterable: true},
+          TestResourceForInference
+        )
+
+      assert column.sortable == true
+      assert column.filterable == true
+    end
+
+    test "an in-memory map calculation does not take nested fields" do
+      assert Cinder.QueryBuilder.validate_field_existence(
+               TestResourceForInference,
+               "metadata_in_memory__any_field"
+             ) == false
+    end
+
     @tag capture_log: true
     test "handles invalid field syntax gracefully" do
       # Invalid bracket notation

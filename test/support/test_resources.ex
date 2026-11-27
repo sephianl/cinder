@@ -35,6 +35,14 @@ defmodule TestSettings do
   end
 end
 
+defmodule TestInMemoryMapCalculation do
+  @moduledoc false
+  use Ash.Resource.Calculation
+
+  @impl true
+  def calculate(records, _opts, _context), do: Enum.map(records, & &1.metadata)
+end
+
 defmodule TestResourceForInference do
   @moduledoc false
   use Ash.Resource, domain: nil
@@ -54,6 +62,11 @@ defmodule TestResourceForInference do
     attribute(:profile, TestProfile)
     attribute(:settings, TestSettings)
     attribute(:metadata, :map)
+  end
+
+  calculations do
+    calculate(:metadata_copy, :map, expr(metadata))
+    calculate(:metadata_in_memory, :map, TestInMemoryMapCalculation)
   end
 end
 
